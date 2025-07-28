@@ -6,12 +6,11 @@ from agents.base_agent import BaseAgent # Make sure this import path is correct
 
 class SalariedProfessional(BaseAgent):
     """
-    A specific agent profile for a Salaried Professional.
-    It inherits from the BaseAgent class and defines its unique attributes and daily actions.
+    An enhanced profile for a Salaried Professional, featuring more detailed
+    and realistic daily financial actions.
     """
     def __init__(self):
-        # 1. Define all profile attributes in a dictionary
-        # This matches the STANDARDIZED_FIELDS in the BaseAgent
+        # 1. Define all profile attributes
         profile_attributes = {
             "archetype_name": "Salaried Professional",
             "risk_profile": "Low",
@@ -38,37 +37,51 @@ class SalariedProfessional(BaseAgent):
             "ecommerce_avg_ticket_size": "Medium",
         }
 
-        # 2. Call the parent's __init__ method, passing the attributes
+        # 2. Call the parent's __init__ method
         super().__init__(**profile_attributes)
 
-        # 3. Define behavioral parameters for the simulation
+        # 3. Define behavioral and simulation parameters
         self.salary_day = random.randint(1, 5)
-        # Unpack the range string to get min and max for salary calculation
         min_sal, max_sal = map(int, self.avg_monthly_income_range.split('-'))
         self.salary_amount = random.uniform(min_sal, max_sal)
         
-        # Define expenses as percentages of salary for realistic budgeting
+        # Expenses as percentages of salary
         self.emi_percentage = 0.25
         self.investment_percentage = 0.15
         self.insurance_percentage = 0.05
         self.utility_bill_percentage = 0.05
         
-        # Define daily spending probabilities
-        self.ecommerce_spend_chance = 0.15  # 15% chance per day
-        self.discretionary_spend_chance = 0.40 # 40% chance on weekdays
+        # Probabilities for daily actions
+        self.ecommerce_spend_chance = 0.15
+        self.weekday_spend_chance = 0.50
+        self.weekend_spend_chance = 0.70
+        
+        # Annual bonus parameters
+        self.annual_bonus_month = 3 # March
+        self.has_received_bonus_this_year = False
 
         # Set a realistic starting balance
-        self.balance = random.uniform(self.salary_amount * 0.1, self.salary_amount * 0.4)
+        self.balance = random.uniform(self.salary_amount * 0.2, self.salary_amount * 0.5)
 
-    def act(self, date: datetime):
-        """Simulates the agent's daily financial actions based on their profile."""
-        events = []
-
-        # --- Recurring Monthly Events ---
+    def _handle_monthly_credits(self, date, events):
+        """Handles salary and annual bonus credits."""
+        # --- Salary Credit ---
         if date.day == self.salary_day:
             txn = self.log_transaction("CREDIT", "Salary Deposit", self.salary_amount, date)
             if txn: events.append(txn)
+            # Reset bonus flag for the new year
+            if date.month == 1:
+                self.has_received_bonus_this_year = False
 
+        # --- Annual Bonus Credit ---
+        if date.month == self.annual_bonus_month and date.day == self.salary_day and not self.has_received_bonus_this_year:
+            bonus_amount = self.salary_amount * random.uniform(1.5, 3.0)
+            txn = self.log_transaction("CREDIT", "Annual Bonus", bonus_amount, date)
+            if txn: events.append(txn)
+            self.has_received_bonus_this_year = True
+
+    def _handle_recurring_debits(self, date, events):
+        """Handles fixed monthly payments like EMIs, insurance, and bills."""
         if self.has_loan_emi and date.day == 10:
             emi_amount = self.salary_amount * self.emi_percentage
             txn = self.log_transaction("DEBIT", "Loan EMI Payment", emi_amount, date)
@@ -89,15 +102,36 @@ class SalariedProfessional(BaseAgent):
             txn = self.log_transaction("DEBIT", "Utility Bill Payment", bill, date)
             if txn: events.append(txn)
 
-        # --- Probabilistic Daily Events ---
-        if random.random() < self.ecommerce_spend_chance:
-            ecommerce_amt = random.uniform(1000, 4000)
+    def _handle_daily_spending(self, date, events):
+        """Handles probabilistic daily spending which varies by day type."""
+        # --- E-commerce and Large Purchases (more likely after bonus) ---
+        ecommerce_chance = self.ecommerce_spend_chance * (2.5 if self.has_received_bonus_this_year else 1)
+        if random.random() < ecommerce_chance:
+            ecommerce_amt = random.uniform(1000, 5000)
             txn = self.log_transaction("DEBIT", "E-commerce Purchase", ecommerce_amt, date)
             if txn: events.append(txn)
 
-        if date.weekday() < 5 and random.random() < self.discretionary_spend_chance:
-            spend = random.uniform(300, 1500)
-            txn = self.log_transaction("DEBIT", "UPI/Card Spend", spend, date)
-            if txn: events.append(txn)
+        # --- Weekday vs. Weekend Spending ---
+        is_weekend = date.weekday() >= 5
+        if is_weekend:
+            if random.random() < self.weekend_spend_chance:
+                spend = random.uniform(500, 2500)
+                txn = self.log_transaction("DEBIT", "Weekend Entertainment/Dining", spend, date)
+                if txn: events.append(txn)
+        else: # It's a weekday
+            if random.random() < self.weekday_spend_chance:
+                spend_type = random.choice(["Transport", "Groceries", "Lunch"])
+                spend_amount = random.uniform(150, 800)
+                txn = self.log_transaction("DEBIT", f"UPI Spend - {spend_type}", spend_amount, date)
+                if txn: events.append(txn)
 
+    def act(self, date: datetime):
+        """
+        Simulates the agent's daily financial actions by calling helper methods.
+        This makes the logic clean and easy to follow.
+        """
+        events = []
+        self._handle_monthly_credits(date, events)
+        self._handle_recurring_debits(date, events)
+        self._handle_daily_spending(date, events)
         return events
