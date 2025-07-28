@@ -18,20 +18,20 @@ The simulation engine creates a diverse population of individuals based on 15 le
 
 The project is organized into three main parts: the simulation engine, the agent classes, and the output directory.
 
-/credit_sim/
-|
-|-- agents/
-|   |-- init.py               # Makes 'agents' a Python package
-|   |-- base_agent.py             # The parent class for all agents
-|   |-- salaried.py  # Archetype 1
-|   |-- gig_worker.py             # Archetype 2
-|   |-- ... (and so on for all 16 archetypes)
-|
-|-- output/
-|   |-- agents.csv                # Generated file with agent profiles
-|   |-- transactions.csv          # Generated file with all transactions
-|
-`-- simulation_engine.py          # The main script to run the simulation
+credit_sim/
+│
+├── agents/
+│ ├── init.py # Makes 'agents' a Python package
+│ ├── base_agent.py # The parent class for all agents
+│ ├── salaried.py # Archetype 1
+│ ├── gig_worker.py # Archetype 2
+│ └── ... (and so on for all 16 archetypes)
+│
+├── output/
+│ ├── agents.csv # Generated file with agent profiles
+│ └── transactions.csv # Generated file with all transactions
+│
+└── simulation_engine.py # The main script to run the simulation
 
 ---
 ## ⚙️ Setup and Installation
