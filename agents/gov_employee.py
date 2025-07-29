@@ -3,7 +3,8 @@
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES
+from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+import numpy as np
 
 class GovernmentEmployee(BaseAgent):
     """
@@ -16,6 +17,15 @@ class GovernmentEmployee(BaseAgent):
         class_config = ECONOMIC_CLASSES[economic_class]
         personality_config = FINANCIAL_PERSONALITIES[financial_personality]
         income_multiplier = random.uniform(*class_config['multiplier'])
+        archetype_name = "Government Employee"
+
+        # --- RISK SCORE CALCULATION ---
+        base_risk = ARCHETYPE_BASE_RISK[archetype_name]
+        class_mod = class_config['risk_mod']
+        pers_mod = personality_config['risk_mod']
+        final_score = base_risk * class_mod * pers_mod
+        risk_score = round(np.clip(final_score, 0.01, 0.99), 4)
+        risk_profile_category = get_risk_profile_from_score(risk_score)
 
         base_income_range = "35000-70000"
         min_sal, max_sal = map(int, base_income_range.split('-'))
@@ -23,8 +33,9 @@ class GovernmentEmployee(BaseAgent):
 
         # 1. Define all profile attributes
         profile_attributes = {
-            "archetype_name": "Government Employee",
-            "risk_profile": "Very_Low",
+            "archetype_name": archetype_name,
+            "risk_profile": risk_profile_category,
+            "risk_score": risk_score,
             "economic_class": economic_class,
             "financial_personality": financial_personality,
             "employment_status": "Salaried",
@@ -34,7 +45,7 @@ class GovernmentEmployee(BaseAgent):
             "income_pattern": "Fixed_Date",
             "savings_retention_rate": "High",
             "has_investment_activity": True,
-            "investment_types": personality_config['investment_types'], # Use personality-defined investments
+            "investment_types": personality_config['investment_types'],
             "has_loan_emi": True if random.random() < class_config['loan_propensity'] else False,
             "loan_emi_payment_status": "ALWAYS_ON_TIME",
             "has_insurance_payments": True,
@@ -58,16 +69,13 @@ class GovernmentEmployee(BaseAgent):
         min_sal_mod, max_sal_mod = map(int, self.avg_monthly_income_range.split('-'))
         self.salary_amount = random.uniform(min_sal_mod, max_sal_mod)
         
-        # Define conservative expense percentages, modified by personality
         self.emi_percentage = 0.30
         self.investment_percentage = 0.10 * personality_config['invest_chance_mod']
         self.insurance_percentage = 0.08
         self.utility_bill_percentage = 0.05
         
-        # Very low probability for discretionary spending, modified by personality
         self.ecommerce_spend_chance = 0.05 * personality_config['spend_chance_mod']
 
-        # Set a healthy starting balance
         self.balance = random.uniform(self.salary_amount * 0.3, self.salary_amount * 0.8)
 
     def _handle_recurring_events(self, date, events):

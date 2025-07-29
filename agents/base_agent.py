@@ -1,4 +1,5 @@
 import uuid
+import random  # <-- ADDED
 from faker import Faker
 from datetime import datetime
 
@@ -10,7 +11,6 @@ class BaseAgent:
     The parent agent class containing standardized fields,
     transaction logging, and common behavior across all agent archetypes.
     """
-
     STANDARDIZED_FIELDS = {
         # Core Profile
         "archetype_name": "Generic",             # str
@@ -23,7 +23,6 @@ class BaseAgent:
         "income_type": "N/A",                    # str
         "avg_monthly_income_range": "N/A",       # str
         "income_pattern": "N/A",                 # str
-
         # Financial Habits
         "savings_retention_rate": "N/A",         # str
         "has_investment_activity": False,        # bool
@@ -32,18 +31,15 @@ class BaseAgent:
         "loan_emi_payment_status": "N/A",        # str
         "has_insurance_payments": False,         # bool
         "insurance_types": [],                   # list[str]
-
         # Utility Payments
         "utility_payment_status": "N/A",         # str
         "mobile_plan_type": "N/A",               # str
-
         # Digital Footprint
         "device_consistency_score": 0.0,         # float
         "ip_consistency_score": 0.0,             # float
         "sim_churn_rate": "N/A",                 # str
         "primary_digital_channels": [],          # list[str]
         "login_pattern": "N/A",                  # str
-
         # E-commerce
         "ecommerce_activity_level": "N/A",       # str
         "ecommerce_avg_ticket_size": "N/A",      # str
@@ -57,7 +53,6 @@ class BaseAgent:
         self.account_no = fake.bban()
         self.balance = kwargs.get("starting_balance", 0.0)
         self.txn_log = []
-
         # Standardized Fields from schema
         for field, default in self.STANDARDIZED_FIELDS.items():
             setattr(self, field, kwargs.get(field, default))
@@ -84,7 +79,6 @@ class BaseAgent:
             if self.balance < amount:
                 return None  # Reject transaction
             self.balance -= amount
-
         txn = {
             "agent_id": self.agent_id,
             "date": date.strftime("%Y-%m-%d"),
@@ -96,6 +90,38 @@ class BaseAgent:
         self.txn_log.append(txn)
         return txn
 
-    def act(self, date: datetime):
+    # --- NEW METHOD TO SIMULATE DAILY SPENDING ---
+    def _handle_daily_living_expenses(self, date, events, daily_spend_chance=0.4):
+        """
+        Simulates generic daily expenses for things like food, transport, and sundries.
+        The amount is scaled based on economic class and the chance is modified by personality.
+        This ensures a consistent, low-level drain on the balance for most agents.
+        """
+        personality_chance_mod = {
+            "Saver": 0.5, "Over_Spender": 1.5,
+            "Rational_Investor": 0.8, "Risk_Addict": 1.2
+        }.get(self.financial_personality, 1.0)
+
+        if random.random() < (daily_spend_chance * personality_chance_mod):
+            try:
+                min_inc, max_inc = map(int, self.avg_monthly_income_range.split('-'))
+                avg_monthly_income = (min_inc + max_inc) / 2
+                daily_slice = avg_monthly_income / 30
+                spend_amount = daily_slice * random.uniform(0.5, 2.0) # Spend 50%-200% of a "daily income slice"
+                
+                if spend_amount > 0 and self.balance > spend_amount:
+                    description = random.choice([
+                        "UPI - Food & Refreshments", "Local Commute", 
+                        "General Store Purchase", "Cash withdrawal for expenses"
+                    ])
+                    txn = self.log_transaction("DEBIT", description, spend_amount, date)
+                    if txn:
+                        events.append(txn)
+            except (ValueError, ZeroDivisionError, AttributeError):
+                # Fails gracefully if income range is not set properly or agent has no income
+                pass
+
+    def act(self, date: datetime, **context): # <-- UPDATED SIGNATURE
         """Override this method in child classes to define agent behavior."""
         return []
+

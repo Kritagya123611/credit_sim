@@ -2,9 +2,9 @@
 
 import random
 from datetime import datetime
-# Make sure your BaseAgent and configs are accessible
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES
+from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+import numpy as np
 
 class SalariedProfessional(BaseAgent):
     """
@@ -17,17 +17,25 @@ class SalariedProfessional(BaseAgent):
         class_config = ECONOMIC_CLASSES[economic_class]
         personality_config = FINANCIAL_PERSONALITIES[financial_personality]
         income_multiplier = random.uniform(*class_config['multiplier'])
+        archetype_name = "Salaried Professional"
+
+        # --- RISK SCORE CALCULATION ---
+        base_risk = ARCHETYPE_BASE_RISK[archetype_name]
+        class_mod = class_config['risk_mod']
+        pers_mod = personality_config['risk_mod']
+        final_score = base_risk * class_mod * pers_mod
+        risk_score = round(np.clip(final_score, 0.01, 0.99), 4)
+        risk_profile_category = get_risk_profile_from_score(risk_score)
 
         base_income_range = "40000-80000"
         min_sal, max_sal = map(int, base_income_range.split('-'))
-        
-        # Modify income based on economic class
         modified_income_range = f"{int(min_sal * income_multiplier)}-{int(max_sal * income_multiplier)}"
 
         # 1. Define all profile attributes
         profile_attributes = {
-            "archetype_name": "Salaried Professional",
-            "risk_profile": "Low",
+            "archetype_name": archetype_name,
+            "risk_profile": risk_profile_category,
+            "risk_score": risk_score,
             "economic_class": economic_class,
             "financial_personality": financial_personality,
             "employment_status": "Salaried",
@@ -56,12 +64,11 @@ class SalariedProfessional(BaseAgent):
         # 2. Call the parent's __init__ method
         super().__init__(**profile_attributes)
 
-        # 3. Define behavioral parameters using the new dimensions
+        # 3. Define behavioral and simulation parameters
         self.salary_day = random.randint(1, 5)
         min_sal_mod, max_sal_mod = map(int, self.avg_monthly_income_range.split('-'))
         self.salary_amount = random.uniform(min_sal_mod, max_sal_mod)
         
-        # Modify expenses and probabilities based on personality
         self.emi_percentage = 0.25
         self.investment_percentage = 0.15 * personality_config['invest_chance_mod']
         self.insurance_percentage = 0.05
@@ -71,7 +78,7 @@ class SalariedProfessional(BaseAgent):
         self.weekday_spend_chance = 0.50 * personality_config['spend_chance_mod']
         self.weekend_spend_chance = 0.70 * personality_config['spend_chance_mod']
         
-        self.annual_bonus_month = 3 # March
+        self.annual_bonus_month = 3
         self.has_received_bonus_this_year = False
 
         self.balance = random.uniform(self.salary_amount * 0.2, self.salary_amount * 0.5)
@@ -81,7 +88,8 @@ class SalariedProfessional(BaseAgent):
         if date.day == self.salary_day:
             txn = self.log_transaction("CREDIT", "Salary Deposit", self.salary_amount, date)
             if txn: events.append(txn)
-            if date.month == 1: self.has_received_bonus_this_year = False
+            if date.month == 1:
+                self.has_received_bonus_this_year = False
 
         if date.month == self.annual_bonus_month and date.day == self.salary_day and not self.has_received_bonus_this_year:
             bonus_amount = self.salary_amount * random.uniform(1.5, 3.0)
@@ -135,7 +143,6 @@ class SalariedProfessional(BaseAgent):
     def act(self, date: datetime, **context):
         """
         Simulates the agent's daily financial actions by calling helper methods.
-        The context argument is ignored but included for compatibility with the engine.
         """
         events = []
         self._handle_monthly_credits(date, events)

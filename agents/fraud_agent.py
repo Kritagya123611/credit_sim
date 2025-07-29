@@ -3,6 +3,7 @@
 import random
 from datetime import datetime, timedelta
 from agents.base_agent import BaseAgent
+from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES
 
 class FraudAgent(BaseAgent):
     """
@@ -15,9 +16,12 @@ class FraudAgent(BaseAgent):
     def __init__(self, fraud_type: str, **fraud_params):
         # 1. Define base profile attributes for a generic fraudster
         profile_attributes = {
-            "archetype_name": "Fraudulent Agent",
+            "archetype_name": f"Fraudulent Agent ({fraud_type})",
             "risk_profile": "Fraud", # A distinct category beyond "Very_High"
-            "employment_status": "Self-Employed", # Often used to obscure income source
+            "risk_score": 0.99, # Deterministic high risk score for fraud
+            "economic_class": "Lower", # Fraudsters often mimic lower-income profiles
+            "financial_personality": "Risk_Addict", # Behavior is inherently risky
+            "employment_status": "Self-Employed",
             "employment_verification": "Not_Verified",
             "income_type": "Unclassified",
             "avg_monthly_income_range": "0-10000",
@@ -45,26 +49,26 @@ class FraudAgent(BaseAgent):
 
         # 3. Configure specific fraud behaviors
         self.fraud_type = fraud_type
-        self.is_active = True # A flag to stop behavior after busting out or cashing out
+        self.is_active = True
 
         if self.fraud_type == 'ring':
-            # Ring members need a shared identifier and digital footprint
             self.ring_id = fraud_params.get('ring_id', None)
             shared_footprint = fraud_params.get('shared_footprint', {})
-            # Overwrite unique device/IP with the shared one
+            # These attributes are dynamically assigned and not in the standard schema,
+            # so we set them directly on the instance.
             self.device_id = shared_footprint.get('device_id')
             self.ip_address = shared_footprint.get('ip_address')
-            self.balance = random.uniform(5000, 10000) # Start with funds to move around
+            self.balance = random.uniform(5000, 10000)
 
         elif self.fraud_type == 'bust_out':
-            self.behavior_state = 'building_credit' # Initial state
+            self.behavior_state = 'building_credit'
             self.creation_date = fraud_params.get('creation_date', datetime.now().date())
-            self.bust_out_day_threshold = random.randint(60, 90) # Days to wait before bust-out
-            self.balance = random.uniform(10000, 20000) # Start with a good balance
+            self.bust_out_day_threshold = random.randint(60, 90)
+            self.balance = random.uniform(10000, 20000)
 
         elif self.fraud_type == 'mule':
             self.cash_out_threshold = random.uniform(30000, 50000)
-            self.balance = random.uniform(0, 1000) # Mules start with low balance
+            self.balance = random.uniform(0, 1000)
 
     def act(self, date: datetime, **context):
         if not self.is_active:
@@ -83,10 +87,9 @@ class FraudAgent(BaseAgent):
                 debit_txn = self.log_transaction("DEBIT", f"P2P to Ring Member {recipient.agent_id[:6]}", amount, date)
                 if debit_txn:
                     events.append(debit_txn)
-                    context['p2p_transfers'].append({'recipient': recipient, 'amount': amount, 'date': date, 'sender_id': self.agent_id})
+                    context.get('p2p_transfers', []).append({'recipient': recipient, 'amount': amount, 'date': date, 'sender_id': self.agent_id})
                     
         elif self.fraud_type == 'bust_out':
-            # --- FIX: Convert datetime to date for subtraction ---
             days_active = (date.date() - self.creation_date).days
             
             if self.behavior_state == 'building_credit':

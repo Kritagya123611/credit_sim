@@ -3,7 +3,8 @@
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES
+from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+import numpy as np
 
 class MigrantWorker(BaseAgent):
     """
@@ -16,6 +17,15 @@ class MigrantWorker(BaseAgent):
         class_config = ECONOMIC_CLASSES[economic_class]
         personality_config = FINANCIAL_PERSONALITIES[financial_personality]
         income_multiplier = random.uniform(*class_config['multiplier'])
+        archetype_name = "Migrant Worker"
+
+        # --- RISK SCORE CALCULATION ---
+        base_risk = ARCHETYPE_BASE_RISK[archetype_name]
+        class_mod = class_config['risk_mod']
+        pers_mod = personality_config['risk_mod']
+        final_score = base_risk * class_mod * pers_mod
+        risk_score = round(np.clip(final_score, 0.01, 0.99), 4)
+        risk_profile_category = get_risk_profile_from_score(risk_score)
 
         base_income_range = "7000-15000"
         min_inc, max_inc = map(int, base_income_range.split('-'))
@@ -23,8 +33,9 @@ class MigrantWorker(BaseAgent):
         
         # 1. Define all profile attributes
         profile_attributes = {
-            "archetype_name": "Migrant Worker",
-            "risk_profile": "Very_High",
+            "archetype_name": archetype_name,
+            "risk_profile": risk_profile_category,
+            "risk_score": risk_score,
             "economic_class": economic_class,
             "financial_personality": financial_personality,
             "employment_status": "Informal_Labor",
@@ -60,14 +71,12 @@ class MigrantWorker(BaseAgent):
         min_mod, max_mod = map(int, self.avg_monthly_income_range.split('-'))
         self.monthly_income = random.uniform(min_mod, max_mod)
         
-        # Higher class might have a more stable monthly pay cycle
         self.pay_cycle = "monthly" if economic_class == 'Lower_Middle' else "weekly"
         
         self.weekly_wage = self.monthly_income / 4
         self.monthly_pay_day = random.randint(1, 5)
         self.weekly_pay_day = 6 # Sunday
         
-        # "Saver" personality sends more money home
         self.remittance_percentage = random.uniform(0.6, 0.85) * (1.1 if financial_personality == 'Saver' else 1)
         self.recharge_chance = 0.07
 

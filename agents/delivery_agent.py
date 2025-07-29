@@ -3,7 +3,8 @@
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES
+from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+import numpy as np
 
 class DeliveryAgent(BaseAgent):
     """
@@ -16,6 +17,15 @@ class DeliveryAgent(BaseAgent):
         class_config = ECONOMIC_CLASSES[economic_class]
         personality_config = FINANCIAL_PERSONALITIES[financial_personality]
         income_multiplier = random.uniform(*class_config['multiplier'])
+        archetype_name = "Delivery Agent / Rider"
+
+        # --- RISK SCORE CALCULATION ---
+        base_risk = ARCHETYPE_BASE_RISK[archetype_name]
+        class_mod = class_config['risk_mod']
+        pers_mod = personality_config['risk_mod']
+        final_score = base_risk * class_mod * pers_mod
+        risk_score = round(np.clip(final_score, 0.01, 0.99), 4)
+        risk_profile_category = get_risk_profile_from_score(risk_score)
 
         base_income_range = "15000-25000"
         min_monthly, max_monthly = map(int, base_income_range.split('-'))
@@ -23,8 +33,9 @@ class DeliveryAgent(BaseAgent):
 
         # 1. Define all profile attributes
         profile_attributes = {
-            "archetype_name": "Delivery Agent / Rider",
-            "risk_profile": "Medium",
+            "archetype_name": archetype_name,
+            "risk_profile": risk_profile_category,
+            "risk_score": risk_score,
             "economic_class": economic_class,
             "financial_personality": financial_personality,
             "employment_status": "Gig_Work_Contractor",
@@ -55,13 +66,12 @@ class DeliveryAgent(BaseAgent):
 
         # 3. Define behavioral and simulation parameters
         min_mod, max_mod = map(int, self.avg_monthly_income_range.split('-'))
-        self.base_daily_payout = random.uniform(min_mod, max_mod) / 26 # Assuming 26 working days
+        self.base_daily_payout = random.uniform(min_mod, max_mod) / 26
 
         self.loan_emi_amount = (min_mod + max_mod) / 2 * 0.15
         self.cod_settlement_chance = 0.60
         self.cod_balance = 0.0
 
-        # Modify spending chances based on personality
         self.fuel_spend_chance = 0.90 * personality_config['spend_chance_mod']
         self.recharge_chance = 0.10 * personality_config['spend_chance_mod']
 
@@ -91,7 +101,7 @@ class DeliveryAgent(BaseAgent):
     def _handle_fixed_debits(self, date, events):
         """Handles loan payments."""
         if self.has_loan_emi and date.day == 10:
-            if random.random() > 0.15: # 85% chance of paying on time
+            if random.random() > 0.15:
                 txn = self.log_transaction("DEBIT", "Two-Wheeler Loan EMI", self.loan_emi_amount, date)
                 if txn: events.append(txn)
 
@@ -115,4 +125,5 @@ class DeliveryAgent(BaseAgent):
         self._handle_income_and_settlements(date, events)
         self._handle_fixed_debits(date, events)
         self._handle_operational_spending(date, events)
+        
         return events

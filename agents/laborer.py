@@ -3,7 +3,8 @@
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES
+from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+import numpy as np
 
 class DailyWageLaborer(BaseAgent):
     """
@@ -13,10 +14,18 @@ class DailyWageLaborer(BaseAgent):
     def __init__(self, economic_class='Lower', financial_personality='Saver'):
         
         # --- Dynamically modify parameters based on new dimensions ---
-        # Note: These dimensions have a smaller effect on this archetype due to economic constraints
         class_config = ECONOMIC_CLASSES[economic_class]
         personality_config = FINANCIAL_PERSONALITIES[financial_personality]
         income_multiplier = random.uniform(*class_config['multiplier'])
+        archetype_name = "Daily Wage Laborer"
+
+        # --- RISK SCORE CALCULATION ---
+        base_risk = ARCHETYPE_BASE_RISK[archetype_name]
+        class_mod = class_config['risk_mod']
+        pers_mod = personality_config['risk_mod']
+        final_score = base_risk * class_mod * pers_mod
+        risk_score = round(np.clip(final_score, 0.01, 0.99), 4)
+        risk_profile_category = get_risk_profile_from_score(risk_score)
 
         base_income_range = "7000-15000"
         min_inc, max_inc = map(int, base_income_range.split('-'))
@@ -24,8 +33,9 @@ class DailyWageLaborer(BaseAgent):
 
         # 1. Define all profile attributes
         profile_attributes = {
-            "archetype_name": "Daily Wage Laborer",
-            "risk_profile": "Very_High",
+            "archetype_name": archetype_name,
+            "risk_profile": risk_profile_category,
+            "risk_score": risk_score,
             "economic_class": economic_class,
             "financial_personality": financial_personality,
             "employment_status": "Informal_Labor",
@@ -58,13 +68,10 @@ class DailyWageLaborer(BaseAgent):
         min_mod, max_mod = map(int, self.avg_monthly_income_range.split('-'))
         avg_monthly_income = random.uniform(min_mod, max_mod)
 
-        # Higher economic class means slightly more consistent work
-        self.daily_work_chance = 0.75 * (1 + (class_config['loan_propensity'] * 0.2)) # Use loan_propensity as proxy for stability
-        self.daily_wage_amount = avg_monthly_income / 22 # Assume ~22 working days
+        self.daily_work_chance = 0.75 * (1 + (class_config['loan_propensity'] * 0.2))
+        self.daily_wage_amount = avg_monthly_income / 22
         
-        # "Saver" personality remits a higher percentage
         self.remittance_percentage = random.uniform(0.6, 0.8) * (1.1 if financial_personality == 'Saver' else 1)
-        
         self.recharge_chance = 0.05
 
         self.balance = random.uniform(50, 200)

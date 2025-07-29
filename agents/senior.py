@@ -3,7 +3,8 @@
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES
+from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+import numpy as np
 
 class SeniorCitizen(BaseAgent):
     """
@@ -16,6 +17,15 @@ class SeniorCitizen(BaseAgent):
         class_config = ECONOMIC_CLASSES[economic_class]
         personality_config = FINANCIAL_PERSONALITIES[financial_personality]
         income_multiplier = random.uniform(*class_config['multiplier'])
+        archetype_name = "Retired Senior Citizen"
+
+        # --- RISK SCORE CALCULATION ---
+        base_risk = ARCHETYPE_BASE_RISK[archetype_name]
+        class_mod = class_config['risk_mod']
+        pers_mod = personality_config['risk_mod']
+        final_score = base_risk * class_mod * pers_mod
+        risk_score = round(np.clip(final_score, 0.01, 0.99), 4)
+        risk_profile_category = get_risk_profile_from_score(risk_score)
 
         base_income_range = "10000-30000"
         min_income, max_income = map(int, base_income_range.split('-'))
@@ -23,8 +33,9 @@ class SeniorCitizen(BaseAgent):
 
         # 1. Define all profile attributes
         profile_attributes = {
-            "archetype_name": "Retired Senior Citizen",
-            "risk_profile": "Very_Low",
+            "archetype_name": archetype_name,
+            "risk_profile": risk_profile_category,
+            "risk_score": risk_score,
             "economic_class": economic_class,
             "financial_personality": financial_personality,
             "employment_status": "Not_Applicable",
@@ -34,7 +45,7 @@ class SeniorCitizen(BaseAgent):
             "income_pattern": "Fixed_Date",
             "savings_retention_rate": "High",
             "has_investment_activity": True,
-            "investment_types": ["FD", "Senior_Citizen_Schemes"], # Always conservative
+            "investment_types": ["FD", "Senior_Citizen_Schemes"],
             "has_loan_emi": False,
             "loan_emi_payment_status": "N/A",
             "has_insurance_payments": True,
@@ -58,7 +69,7 @@ class SeniorCitizen(BaseAgent):
         min_mod, max_mod = map(int, self.avg_monthly_income_range.split('-'))
         self.monthly_income = random.uniform(min_mod, max_mod)
         
-        self.insurance_percentage = 0.15 # Health insurance is a major expense
+        self.insurance_percentage = 0.15
         self.utility_bill_percentage = 0.08
         
         self.weekly_grocery_day = 4 # Friday
@@ -82,7 +93,7 @@ class SeniorCitizen(BaseAgent):
             if txn: events.append(txn)
 
         if date.day == self.monthly_pharmacy_day:
-            pharma_spend = self.monthly_income * 0.05 # Pharmacy spend scales with income
+            pharma_spend = self.monthly_income * 0.05
             txn = self.log_transaction("DEBIT", "Pharmacy/Medicines", pharma_spend, date)
             if txn: events.append(txn)
 
@@ -94,7 +105,7 @@ class SeniorCitizen(BaseAgent):
     def _handle_weekly_events(self, date, events):
         """Handles structured weekly spending, like for groceries."""
         if date.weekday() == self.weekly_grocery_day:
-            grocery_spend = self.monthly_income * 0.08 # Weekly groceries scale with income
+            grocery_spend = self.monthly_income * 0.08
             txn = self.log_transaction("DEBIT", "Weekly Groceries/Essentials", grocery_spend, date)
             if txn: events.append(txn)
 
@@ -102,7 +113,6 @@ class SeniorCitizen(BaseAgent):
         """Simulates a major, infrequent financial planning event."""
         if self.has_investment_activity and date.month == self.large_event_month and date.day == 25 and not self.has_done_large_event_this_year:
             fd_amount = self.balance * random.uniform(0.3, 0.5)
-            # Higher class citizens are more likely to make large investments
             if fd_amount > (10000 * (1 if self.economic_class in ['Lower', 'Lower_Middle'] else 2)):
                 txn = self.log_transaction("DEBIT", "New Fixed Deposit Creation", fd_amount, date)
                 if txn: events.append(txn)

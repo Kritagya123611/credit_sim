@@ -3,7 +3,8 @@
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES
+from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+import numpy as np
 
 class GigWorker(BaseAgent):
     """
@@ -16,6 +17,15 @@ class GigWorker(BaseAgent):
         class_config = ECONOMIC_CLASSES[economic_class]
         personality_config = FINANCIAL_PERSONALITIES[financial_personality]
         income_multiplier = random.uniform(*class_config['multiplier'])
+        archetype_name = "Gig Worker / Freelancer"
+
+        # --- RISK SCORE CALCULATION ---
+        base_risk = ARCHETYPE_BASE_RISK[archetype_name]
+        class_mod = class_config['risk_mod']
+        pers_mod = personality_config['risk_mod']
+        final_score = base_risk * class_mod * pers_mod
+        risk_score = round(np.clip(final_score, 0.01, 0.99), 4)
+        risk_profile_category = get_risk_profile_from_score(risk_score)
 
         base_income_range = "8000-35000"
         min_inc, max_inc = map(int, base_income_range.split('-'))
@@ -23,8 +33,9 @@ class GigWorker(BaseAgent):
 
         # 1. Define all profile attributes
         profile_attributes = {
-            "archetype_name": "Gig Worker / Freelancer",
-            "risk_profile": "Medium",
+            "archetype_name": archetype_name,
+            "risk_profile": risk_profile_category,
+            "risk_score": risk_score,
             "economic_class": economic_class,
             "financial_personality": financial_personality,
             "employment_status": "Self-Employed",
@@ -35,7 +46,7 @@ class GigWorker(BaseAgent):
             "savings_retention_rate": "Low",
             "has_investment_activity": len(personality_config['investment_types']) > 0 and financial_personality != 'Over_Spender',
             "investment_types": personality_config['investment_types'],
-            "has_loan_emi": True if random.random() < class_config['loan_propensity'] * 0.5 else False, # Lower loan chance
+            "has_loan_emi": True if random.random() < class_config['loan_propensity'] * 0.5 else False,
             "loan_emi_payment_status": "Mostly_On_Time",
             "has_insurance_payments": False,
             "insurance_types": [],
@@ -58,13 +69,12 @@ class GigWorker(BaseAgent):
         avg_monthly_income = random.uniform(min_mod, max_mod)
 
         self.daily_income_chance = 0.35
-        self.avg_gig_payment = avg_monthly_income / 8 # Assume ~8 paying gigs a month
+        self.avg_gig_payment = avg_monthly_income / 8
         self.income_sources = ["Client Project", "Platform Payout", "Freelance Task"]
         
-        # Modify expenses and discipline based on personality
         self.rent_day = random.randint(5, 10)
         self.rent_amount = avg_monthly_income * random.uniform(0.3, 0.5)
-        self.bill_payment_late_chance = 0.20 / personality_config['spend_chance_mod'] # Savers are less likely to be late
+        self.bill_payment_late_chance = 0.20 / personality_config['spend_chance_mod']
         
         self.daily_spend_chance = 0.80 * personality_config['spend_chance_mod']
         self.prepaid_recharge_chance = 0.10 * personality_config['spend_chance_mod']

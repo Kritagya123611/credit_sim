@@ -3,7 +3,8 @@
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES
+from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+import numpy as np
 
 class ContentCreator(BaseAgent):
     """
@@ -16,14 +17,25 @@ class ContentCreator(BaseAgent):
         class_config = ECONOMIC_CLASSES[economic_class]
         personality_config = FINANCIAL_PERSONALITIES[financial_personality]
         income_multiplier = random.uniform(*class_config['multiplier'])
+        archetype_name = "Content Creator / Influencer"
+
+        # --- RISK SCORE CALCULATION ---
+        base_risk = ARCHETYPE_BASE_RISK[archetype_name]
+        class_mod = class_config['risk_mod']
+        pers_mod = personality_config['risk_mod']
+        final_score = base_risk * class_mod * pers_mod
+        risk_score = round(np.clip(final_score, 0.01, 0.99), 4)
+        risk_profile_category = get_risk_profile_from_score(risk_score)
 
         base_income_range = "20000-100000"
         min_inc, max_inc = map(int, base_income_range.split('-'))
         modified_income_range = f"{int(min_inc * income_multiplier)}-{int(max_inc * income_multiplier)}"
 
+        # 1. Define all profile attributes
         profile_attributes = {
-            "archetype_name": "Influencer / Content Creator",
-            "risk_profile": "High",
+            "archetype_name": archetype_name,
+            "risk_profile": risk_profile_category,
+            "risk_score": risk_score,
             "economic_class": economic_class,
             "financial_personality": financial_personality,
             "employment_status": "Self-Employed",
@@ -49,13 +61,14 @@ class ContentCreator(BaseAgent):
             "ecommerce_avg_ticket_size": "High",
         }
         
+        # 2. Call the parent's __init__ method
         super().__init__(**profile_attributes)
 
-        # Define behavioral parameters using the new dimensions
+        # 3. Define behavioral parameters using the new dimensions
         min_mod, max_mod = map(int, self.avg_monthly_income_range.split('-'))
         self.avg_monthly_income = random.uniform(min_mod, max_mod)
 
-        self.platform_payout_chance = 0.25 * personality_config['invest_chance_mod'] # More investment focused means more platform work
+        self.platform_payout_chance = 0.25 * personality_config['invest_chance_mod']
         self.sponsorship_chance = 0.03
         self.has_sponsorship_funds = False
 
@@ -103,7 +116,7 @@ class ContentCreator(BaseAgent):
         """Simulates large, dynamic spending often triggered by a sponsorship."""
         spend_chance_multiplier = 5.0 if self.has_sponsorship_funds else 1.0
 
-        if self.has_sponsorship_funds and random.random() < 0.6:
+        if self.has_sponsorship_funds and self.has_investment_activity and random.random() < 0.6:
             spend_category = random.choice(self.investment_types + ["New Camera/Laptop Gear", "Content Trip Booking"])
             amount = self.balance * random.uniform(0.3, 0.7)
             txn = self.log_transaction("DEBIT", spend_category, amount, date)
@@ -125,4 +138,5 @@ class ContentCreator(BaseAgent):
         self._handle_income(date, events)
         self._handle_fixed_and_professional_expenses(date, events)
         self._handle_dynamic_spending(date, events)
+        
         return events

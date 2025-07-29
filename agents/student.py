@@ -3,7 +3,8 @@
 import random
 from datetime import datetime, timedelta
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES
+from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+import numpy as np
 
 class Student(BaseAgent):
     """
@@ -16,6 +17,15 @@ class Student(BaseAgent):
         class_config = ECONOMIC_CLASSES[economic_class]
         personality_config = FINANCIAL_PERSONALITIES[financial_personality]
         income_multiplier = random.uniform(*class_config['multiplier'])
+        archetype_name = "Student"
+
+        # --- RISK SCORE CALCULATION ---
+        base_risk = ARCHETYPE_BASE_RISK[archetype_name]
+        class_mod = class_config['risk_mod']
+        pers_mod = personality_config['risk_mod']
+        final_score = base_risk * class_mod * pers_mod
+        risk_score = round(np.clip(final_score, 0.01, 0.99), 4)
+        risk_profile_category = get_risk_profile_from_score(risk_score)
 
         base_income_range = "3000-10000"
         min_allowance, max_allowance = map(int, base_income_range.split('-'))
@@ -23,8 +33,9 @@ class Student(BaseAgent):
         
         # 1. Define all profile attributes
         profile_attributes = {
-            "archetype_name": "Student",
-            "risk_profile": "High",
+            "archetype_name": archetype_name,
+            "risk_profile": risk_profile_category,
+            "risk_score": risk_score,
             "economic_class": economic_class,
             "financial_personality": financial_personality,
             "employment_status": "Not_Applicable",
@@ -62,7 +73,7 @@ class Student(BaseAgent):
         self.recharge_chance = 0.08
         self.bnpl_chance = 0.15 if financial_personality == 'Over_Spender' else 0.05
         
-        self.bnpl_repayments = {} # To track BNPL debts {due_date: amount}
+        self.bnpl_repayments = {}
 
         self.balance = random.uniform(100, 500)
 
@@ -74,21 +85,18 @@ class Student(BaseAgent):
 
     def _handle_spending(self, date, events):
         """Simulates high-frequency spending and potential BNPL usage."""
-        # --- BNPL Repayments ---
-        if date in self.bnpl_repayments:
-            amount_due = self.bnpl_repayments[date]
+        if date.date() in self.bnpl_repayments:
+            amount_due = self.bnpl_repayments[date.date()]
             txn = self.log_transaction("DEBIT", "BNPL Repayment", amount_due, date)
             if txn:
                 events.append(txn)
-                del self.bnpl_repayments[date]
+                del self.bnpl_repayments[date.date()]
 
-        # --- Prepaid Mobile Recharge ---
         if random.random() < self.recharge_chance:
             recharge_amount = random.choice([99, 149, 199, 239])
             txn = self.log_transaction("DEBIT", "Prepaid Mobile Recharge", recharge_amount, date)
             if txn: events.append(txn)
 
-        # --- Daily UPI Spending ---
         if random.random() < self.daily_spend_chance:
             spend_category = random.choice([
                 "Food_Delivery", "Cab_Service", "OTT_Subscription",
@@ -96,10 +104,7 @@ class Student(BaseAgent):
             ])
             spend_amount = random.uniform(100, 600)
             
-            # Decide whether to use BNPL or UPI
             if spend_category == "Food_Delivery" and random.random() < self.bnpl_chance:
-                # This is not a real transaction, but an off-book credit event
-                # We log a repayment due in 15 days
                 repayment_date = date.date() + timedelta(days=15)
                 self.bnpl_repayments[repayment_date] = self.bnpl_repayments.get(repayment_date, 0) + spend_amount
             else:

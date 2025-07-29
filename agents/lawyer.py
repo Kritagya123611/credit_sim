@@ -3,7 +3,8 @@
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES
+from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+import numpy as np
 
 class Lawyer(BaseAgent):
     """
@@ -16,6 +17,15 @@ class Lawyer(BaseAgent):
         class_config = ECONOMIC_CLASSES[economic_class]
         personality_config = FINANCIAL_PERSONALITIES[financial_personality]
         income_multiplier = random.uniform(*class_config['multiplier'])
+        archetype_name = "Lawyer / Consultant"
+
+        # --- RISK SCORE CALCULATION ---
+        base_risk = ARCHETYPE_BASE_RISK[archetype_name]
+        class_mod = class_config['risk_mod']
+        pers_mod = personality_config['risk_mod']
+        final_score = base_risk * class_mod * pers_mod
+        risk_score = round(np.clip(final_score, 0.01, 0.99), 4)
+        risk_profile_category = get_risk_profile_from_score(risk_score)
 
         base_income_range = "50000-200000"
         min_monthly, max_monthly = map(int, base_income_range.split('-'))
@@ -23,8 +33,9 @@ class Lawyer(BaseAgent):
 
         # 1. Define all profile attributes
         profile_attributes = {
-            "archetype_name": "Lawyer / Consultant",
-            "risk_profile": "Medium",
+            "archetype_name": archetype_name,
+            "risk_profile": risk_profile_category,
+            "risk_score": risk_score,
             "economic_class": economic_class,
             "financial_personality": financial_personality,
             "employment_status": "Self-Employed_Professional",
@@ -96,8 +107,6 @@ class Lawyer(BaseAgent):
     def _handle_spending_and_investment(self, date, events):
         """Simulates spending and large investments, often after a payout."""
         if self.has_large_cash_reserve:
-            # --- THIS IS THE FIX ---
-            # Only attempt to invest if the agent's profile allows for it.
             if self.has_investment_activity and random.random() < (0.5 * self.invest_chance_mod):
                 investment_amount = self.balance * random.uniform(0.3, 0.6)
                 investment_type = random.choice(self.investment_types)

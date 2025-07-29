@@ -3,7 +3,8 @@
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES
+from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+import numpy as np
 
 class Homemaker(BaseAgent):
     """
@@ -16,15 +17,25 @@ class Homemaker(BaseAgent):
         class_config = ECONOMIC_CLASSES[economic_class]
         personality_config = FINANCIAL_PERSONALITIES[financial_personality]
         income_multiplier = random.uniform(*class_config['multiplier'])
+        archetype_name = "Homemaker"
 
-        base_income_range = "10000-30000" # This represents the household budget they manage
+        # --- RISK SCORE CALCULATION ---
+        base_risk = ARCHETYPE_BASE_RISK[archetype_name]
+        class_mod = class_config['risk_mod']
+        pers_mod = personality_config['risk_mod']
+        final_score = base_risk * class_mod * pers_mod
+        risk_score = round(np.clip(final_score, 0.01, 0.99), 4)
+        risk_profile_category = get_risk_profile_from_score(risk_score)
+
+        base_income_range = "10000-30000"
         min_inc, max_inc = map(int, base_income_range.split('-'))
         modified_income_range = f"{int(min_inc * income_multiplier)}-{int(max_inc * income_multiplier)}"
 
         # 1. Define all profile attributes
         profile_attributes = {
-            "archetype_name": "Homemaker",
-            "risk_profile": "Very_High",
+            "archetype_name": archetype_name,
+            "risk_profile": risk_profile_category,
+            "risk_score": risk_score,
             "economic_class": economic_class,
             "financial_personality": financial_personality,
             "employment_status": "Not_Applicable",
@@ -32,12 +43,12 @@ class Homemaker(BaseAgent):
             "income_type": "Family_Support",
             "avg_monthly_income_range": modified_income_range,
             "income_pattern": "Fixed_Date",
-            "savings_retention_rate": "Very_Low", # Manages cash flow, doesn't retain savings
+            "savings_retention_rate": "Very_Low",
             "has_investment_activity": False,
             "investment_types": [],
             "has_loan_emi": True if random.random() < class_config['loan_propensity'] else False,
             "loan_emi_payment_status": "ALWAYS_ON_TIME",
-            "has_insurance_payments": True, # Assume most households have some form of child plan
+            "has_insurance_payments": True,
             "insurance_types": ["Child_Education_Plan"],
             "utility_payment_status": "ALWAYS_ON_TIME",
             "mobile_plan_type": "Prepaid",
