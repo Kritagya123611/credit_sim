@@ -1,33 +1,45 @@
 # agents/student.py
 
 import random
-from datetime import datetime
-from agents.base_agent import BaseAgent # Make sure this import path is correct
+from datetime import datetime, timedelta
+from agents.base_agent import BaseAgent
+from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES
 
 class Student(BaseAgent):
     """
-    A specific agent profile for a Student.
-    Represents a "thin-file" user with no formal income, high digital activity,
-    and consumption-driven spending patterns.
+    A multi-dimensional profile for a Student.
+    Behavior is modified by economic_class and financial_personality.
     """
-    def __init__(self):
-        # 1. Define all profile attributes for the Student
+    def __init__(self, economic_class='Lower_Middle', financial_personality='Over_Spender'):
+        
+        # --- Dynamically modify parameters based on new dimensions ---
+        class_config = ECONOMIC_CLASSES[economic_class]
+        personality_config = FINANCIAL_PERSONALITIES[financial_personality]
+        income_multiplier = random.uniform(*class_config['multiplier'])
+
+        base_income_range = "3000-10000"
+        min_allowance, max_allowance = map(int, base_income_range.split('-'))
+        modified_income_range = f"{int(min_allowance * income_multiplier)}-{int(max_allowance * income_multiplier)}"
+        
+        # 1. Define all profile attributes
         profile_attributes = {
             "archetype_name": "Student",
             "risk_profile": "High",
+            "economic_class": economic_class,
+            "financial_personality": financial_personality,
             "employment_status": "Not_Applicable",
             "employment_verification": "Not_Applicable",
             "income_type": "Allowance",
-            "avg_monthly_income_range": "3000-10000",
+            "avg_monthly_income_range": modified_income_range,
             "income_pattern": "Irregular",
             "savings_retention_rate": "Very_Low",
             "has_investment_activity": False,
-            "investment_types": ["None"],
+            "investment_types": [],
             "has_loan_emi": False,
             "loan_emi_payment_status": "N/A",
             "has_insurance_payments": False,
-            "insurance_types": ["None"],
-            "utility_payment_status": "N/A", # Typically don't pay household bills
+            "insurance_types": [],
+            "utility_payment_status": "N/A",
             "mobile_plan_type": "Prepaid",
             "device_consistency_score": round(random.uniform(0.70, 0.85), 2),
             "ip_consistency_score": round(random.uniform(0.40, 0.60), 2),
@@ -37,31 +49,39 @@ class Student(BaseAgent):
             "ecommerce_activity_level": "High",
             "ecommerce_avg_ticket_size": "Low",
         }
-
+        
         # 2. Call the parent's __init__ method
         super().__init__(**profile_attributes)
 
         # 3. Define behavioral and simulation parameters
-        min_allowance, max_allowance = map(int, self.avg_monthly_income_range.split('-'))
-        self.allowance_amount = random.uniform(min_allowance, max_allowance)
-        # Students receive allowance on random days, simulating parental transfers
+        min_mod, max_mod = map(int, self.avg_monthly_income_range.split('-'))
+        self.allowance_amount = random.uniform(min_mod, max_mod)
         self.allowance_days = sorted(random.sample(range(2, 28), random.randint(1, 2)))
 
-        # High probability of daily spending
-        self.daily_spend_chance = 0.75
-        self.recharge_chance = 0.08 # 8% chance per day to need a recharge
+        self.daily_spend_chance = 0.75 * personality_config['spend_chance_mod']
+        self.recharge_chance = 0.08
+        self.bnpl_chance = 0.15 if financial_personality == 'Over_Spender' else 0.05
+        
+        self.bnpl_repayments = {} # To track BNPL debts {due_date: amount}
 
-        # Set a very low starting balance
         self.balance = random.uniform(100, 500)
 
     def _handle_income(self, date, events):
-        """Simulates receiving allowance from family on random days of the month."""
+        """Simulates receiving allowance from family."""
         if date.day in self.allowance_days:
             txn = self.log_transaction("CREDIT", "Allowance/Family Support", self.allowance_amount, date)
             if txn: events.append(txn)
 
     def _handle_spending(self, date, events):
-        """Simulates high-frequency, low-value spending on lifestyle and essentials."""
+        """Simulates high-frequency spending and potential BNPL usage."""
+        # --- BNPL Repayments ---
+        if date in self.bnpl_repayments:
+            amount_due = self.bnpl_repayments[date]
+            txn = self.log_transaction("DEBIT", "BNPL Repayment", amount_due, date)
+            if txn:
+                events.append(txn)
+                del self.bnpl_repayments[date]
+
         # --- Prepaid Mobile Recharge ---
         if random.random() < self.recharge_chance:
             recharge_amount = random.choice([99, 149, 199, 239])
@@ -75,14 +95,20 @@ class Student(BaseAgent):
                 "Groceries", "Gaming_Purchase", "Peer_Transfer"
             ])
             spend_amount = random.uniform(100, 600)
-            txn = self.log_transaction("DEBIT", f"UPI Spend - {spend_category}", spend_amount, date)
-            if txn: events.append(txn)
+            
+            # Decide whether to use BNPL or UPI
+            if spend_category == "Food_Delivery" and random.random() < self.bnpl_chance:
+                # This is not a real transaction, but an off-book credit event
+                # We log a repayment due in 15 days
+                repayment_date = date.date() + timedelta(days=15)
+                self.bnpl_repayments[repayment_date] = self.bnpl_repayments.get(repayment_date, 0) + spend_amount
+            else:
+                txn = self.log_transaction("DEBIT", f"UPI Spend - {spend_category}", spend_amount, date)
+                if txn: events.append(txn)
 
-
-    def act(self, date: datetime):
+    def act(self, date: datetime, **context):
         """
-        Simulates the student's daily financial actions, which are primarily
-        consumption-based with no fixed obligations.
+        Simulates the student's daily financial actions.
         """
         events = []
         self._handle_income(date, events)

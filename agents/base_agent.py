@@ -15,6 +15,9 @@ class BaseAgent:
         # Core Profile
         "archetype_name": "Generic",             # str
         "risk_profile": "N/A",                   # str
+        "risk_score": 0.0,                       # float
+        "economic_class": "N/A",                 # str             
+        "financial_personality": "N/A",          # str
         "employment_status": "N/A",              # str
         "employment_verification": "N/A",        # str
         "income_type": "N/A",                    # str

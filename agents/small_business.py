@@ -2,27 +2,40 @@
 
 import random
 from datetime import datetime
-from agents.base_agent import BaseAgent # Make sure this import path is correct
+from agents.base_agent import BaseAgent
+from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES
 
 class SmallBusinessOwner(BaseAgent):
     """
-    A specific agent profile for a Small Business Owner (e.g., Kirana Shop).
-    Characterized by high-volume, erratic sales and complex operational expenses.
+    A multi-dimensional profile for a Small Business Owner.
+    Behavior is modified by economic_class and financial_personality.
     """
-    def __init__(self):
-        # 1. Define all profile attributes for the Small Business Owner
+    def __init__(self, economic_class='Middle', financial_personality='Rational_Investor'):
+        
+        # --- Dynamically modify parameters based on new dimensions ---
+        class_config = ECONOMIC_CLASSES[economic_class]
+        personality_config = FINANCIAL_PERSONALITIES[financial_personality]
+        income_multiplier = random.uniform(*class_config['multiplier'])
+
+        base_income_range = "50000-200000"
+        min_inc, max_inc = map(int, base_income_range.split('-'))
+        modified_income_range = f"{int(min_inc * income_multiplier)}-{int(max_inc * income_multiplier)}"
+
+        # 1. Define all profile attributes
         profile_attributes = {
             "archetype_name": "Small Business Owner",
             "risk_profile": "Medium",
+            "economic_class": economic_class,
+            "financial_personality": financial_personality,
             "employment_status": "Self-Employed",
             "employment_verification": "Udyam_Registered",
             "income_type": "Business_Sales",
-            "avg_monthly_income_range": "50000-200000",
+            "avg_monthly_income_range": modified_income_range,
             "income_pattern": "Erratic_High_Volume",
             "savings_retention_rate": "Low",
             "has_investment_activity": True,
             "investment_types": ["Business_Reinvestment"],
-            "has_loan_emi": True,
+            "has_loan_emi": True if random.random() < class_config['loan_propensity'] else False,
             "loan_emi_payment_status": "Mostly_On_Time",
             "has_insurance_payments": True,
             "insurance_types": ["Business_Insurance"],
@@ -41,25 +54,27 @@ class SmallBusinessOwner(BaseAgent):
         super().__init__(**profile_attributes)
 
         # 3. Define behavioral and simulation parameters
-        self.daily_sales_chance = 0.95  # High chance of having sales every day
-        self.avg_sale_amount = random.uniform(200, 1500)
-        self.num_daily_sales = random.randint(10, 50)
+        min_mod, max_mod = map(int, self.avg_monthly_income_range.split('-'))
+        avg_monthly_turnover = random.uniform(min_mod, max_mod)
+
+        self.daily_sales_chance = 0.95
+        # Scale the number and size of sales by the income multiplier
+        self.num_daily_sales = int(random.randint(10, 50) * income_multiplier)
+        self.avg_sale_amount = random.uniform(200, 1500) * income_multiplier
         
-        # Business expenses
-        self.num_employees = random.randint(2, 5)
+        # Business expenses also scale with the size of the business
+        self.num_employees = int(random.randint(2, 5) * income_multiplier)
         self.employee_salaries = [random.uniform(8000, 15000) for _ in range(self.num_employees)]
         self.vendor_payment_day = random.randint(15, 20)
-        self.vendor_payment_amount = random.uniform(20000, 50000)
-        self.business_loan_emi_amount = random.uniform(5000, 15000)
-        self.owner_drawing_amount = random.uniform(15000, 30000)
+        self.vendor_payment_amount = avg_monthly_turnover * random.uniform(0.3, 0.5)
+        self.business_loan_emi_amount = avg_monthly_turnover * 0.1
+        self.owner_drawing_amount = avg_monthly_turnover * 0.2
 
-        # Set a moderate starting balance for cash flow
-        self.balance = random.uniform(20000, 50000)
+        self.balance = random.uniform(avg_monthly_turnover * 0.2, avg_monthly_turnover * 0.4)
 
     def _handle_sales_income(self, date, events):
         """Simulates erratic daily sales from various sources."""
         if random.random() < self.daily_sales_chance:
-            # Sales are higher on weekends
             sales_multiplier = 2.0 if date.weekday() >= 5 else 1.0
             num_sales_today = int(self.num_daily_sales * sales_multiplier)
             
@@ -71,23 +86,19 @@ class SmallBusinessOwner(BaseAgent):
 
     def _handle_operational_expenses(self, date, events):
         """Simulates payroll, vendor payments, loan EMIs, and owner's drawings."""
-        # --- Monthly Payroll (creates one-to-many pattern) ---
-        if date.day == 28:
+        if date.day == 28 and self.num_employees > 0:
             for i, salary in enumerate(self.employee_salaries):
                 txn = self.log_transaction("DEBIT", f"Salary to Employee {i+1}", salary, date)
                 if txn: events.append(txn)
 
-        # --- Vendor Payments ---
         if date.day == self.vendor_payment_day:
             txn = self.log_transaction("DEBIT", "Vendor/Supplier Payment", self.vendor_payment_amount, date)
             if txn: events.append(txn)
 
-        # --- Business Loan EMI ---
         if self.has_loan_emi and date.day == 10:
             txn = self.log_transaction("DEBIT", "Business Loan EMI", self.business_loan_emi_amount, date)
             if txn: events.append(txn)
             
-        # --- Owner's Drawings for personal expenses ---
         if date.day == 5:
             txn = self.log_transaction("DEBIT", "Owner's Drawings", self.owner_drawing_amount, date)
             if txn: events.append(txn)
@@ -95,11 +106,11 @@ class SmallBusinessOwner(BaseAgent):
     def _handle_utility_bills(self, date, events):
         """Simulates paying for commercial utilities."""
         if date.day == 25:
-            commercial_bill = random.uniform(3000, 8000)
+            commercial_bill = self.avg_sale_amount * 2.0 # Rough estimate for utility
             txn = self.log_transaction("DEBIT", "Commercial Electricity Bill", commercial_bill, date)
             if txn: events.append(txn)
 
-    def act(self, date: datetime):
+    def act(self, date: datetime, **context):
         """
         Simulates the daily financial operations of a small business.
         """

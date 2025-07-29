@@ -3,29 +3,41 @@
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
+from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES
 
 class Homemaker(BaseAgent):
     """
-    An enhanced profile for a Homemaker.
-    Simulates their role as a household financial manager with structured, need-based
-    spending and highlights the data ambiguity from a shared digital footprint.
+    A multi-dimensional profile for a Homemaker.
+    Behavior is modified by the household's economic_class and financial_personality.
     """
-    def __init__(self):
+    def __init__(self, economic_class='Lower_Middle', financial_personality='Saver'):
+        
+        # --- Dynamically modify parameters based on new dimensions ---
+        class_config = ECONOMIC_CLASSES[economic_class]
+        personality_config = FINANCIAL_PERSONALITIES[financial_personality]
+        income_multiplier = random.uniform(*class_config['multiplier'])
+
+        base_income_range = "10000-30000" # This represents the household budget they manage
+        min_inc, max_inc = map(int, base_income_range.split('-'))
+        modified_income_range = f"{int(min_inc * income_multiplier)}-{int(max_inc * income_multiplier)}"
+
         # 1. Define all profile attributes
         profile_attributes = {
             "archetype_name": "Homemaker",
             "risk_profile": "Very_High",
+            "economic_class": economic_class,
+            "financial_personality": financial_personality,
             "employment_status": "Not_Applicable",
             "employment_verification": "Not_Applicable",
             "income_type": "Family_Support",
-            "avg_monthly_income_range": "10000-30000",
+            "avg_monthly_income_range": modified_income_range,
             "income_pattern": "Fixed_Date",
-            "savings_retention_rate": "Very_Low",
+            "savings_retention_rate": "Very_Low", # Manages cash flow, doesn't retain savings
             "has_investment_activity": False,
-            "investment_types": ["None"],
-            "has_loan_emi": True,
+            "investment_types": [],
+            "has_loan_emi": True if random.random() < class_config['loan_propensity'] else False,
             "loan_emi_payment_status": "ALWAYS_ON_TIME",
-            "has_insurance_payments": True,
+            "has_insurance_payments": True, # Assume most households have some form of child plan
             "insurance_types": ["Child_Education_Plan"],
             "utility_payment_status": "ALWAYS_ON_TIME",
             "mobile_plan_type": "Prepaid",
@@ -42,69 +54,57 @@ class Homemaker(BaseAgent):
         super().__init__(**profile_attributes)
 
         # 3. Define behavioral and simulation parameters
-        min_inc, max_inc = map(int, self.avg_monthly_income_range.split('-'))
-        self.monthly_allowance = random.uniform(min_inc, max_inc)
+        min_mod, max_mod = map(int, self.avg_monthly_income_range.split('-'))
+        self.monthly_allowance = random.uniform(min_mod, max_mod)
 
-        # Household expense parameters
         self.loan_emi_amount = self.monthly_allowance * 0.30
-        self.insurance_premium = random.uniform(1500, 3000)
-        self.utility_bill_amount = random.uniform(2000, 4000)
+        self.insurance_premium = self.monthly_allowance * 0.10
+        self.utility_bill_amount = self.monthly_allowance * 0.15
         self.weekly_grocery_day = 5 # Saturday
-        self.school_fee_months = [1, 4, 7, 10] # Fees due at start of quarter
+        self.school_fee_months = [1, 4, 7, 10]
 
-        # Low chance for other ad-hoc spending
-        self.occasional_spend_chance = 0.08
-
-        # Placeholder for main script to link devices
+        self.occasional_spend_chance = 0.08 * personality_config['spend_chance_mod']
         self.shared_device_id = None 
 
-        # Set a starting balance for cash flow
-        self.balance = random.uniform(1000, 5000)
+        self.balance = random.uniform(self.monthly_allowance * 0.05, self.monthly_allowance * 0.2)
 
     def _handle_monthly_income_and_fixed_costs(self, date, events):
         """Handles the monthly allowance and fixed, recurring household payments."""
-        # --- Monthly Family Support Transfer ---
         if date.day == 1:
             txn = self.log_transaction("CREDIT", "Family Support Transfer", self.monthly_allowance, date)
             if txn: events.append(txn)
 
-        # --- Loan EMI (as co-payment) ---
         if self.has_loan_emi and date.day == 10:
             txn = self.log_transaction("DEBIT", "Home/Car Loan EMI (Co-payment)", self.loan_emi_amount, date)
             if txn: events.append(txn)
             
-        # --- Utility Bill Payment ---
         if date.day == 15:
             txn = self.log_transaction("DEBIT", "Utility Bill Payment (Gas/DTH)", self.utility_bill_amount, date)
             if txn: events.append(txn)
 
-        # --- Child's Insurance Plan ---
         if self.has_insurance_payments and date.day == 20:
             txn = self.log_transaction("DEBIT", "Child Education Plan Premium", self.insurance_premium, date)
             if txn: events.append(txn)
 
     def _handle_household_spending(self, date, events):
         """Simulates structured and occasional spending for the household."""
-        # --- Weekly Grocery Shopping ---
         if date.weekday() == self.weekly_grocery_day:
-            grocery_amount = random.uniform(1000, 2500)
+            grocery_amount = self.monthly_allowance * random.uniform(0.1, 0.15)
             txn = self.log_transaction("DEBIT", "UPI - Weekly Groceries", grocery_amount, date)
             if txn: events.append(txn)
 
-        # --- Quarterly School Fees ---
         if date.month in self.school_fee_months and date.day == 5:
-            fee_amount = random.uniform(5000, 15000)
+            fee_amount = self.monthly_allowance * random.uniform(0.5, 1.5)
             txn = self.log_transaction("DEBIT", "Netbanking - School Fees", fee_amount, date)
             if txn: events.append(txn)
 
-        # --- Occasional E-commerce ---
         if random.random() < self.occasional_spend_chance:
-            amount = random.uniform(800, 3000)
+            amount = self.monthly_allowance * random.uniform(0.05, 0.1)
             category = random.choice(["Kids Clothing", "Home Goods", "Online Pharmacy"])
             txn = self.log_transaction("DEBIT", f"E-commerce - {category}", amount, date)
             if txn: events.append(txn)
     
-    def act(self, date: datetime):
+    def act(self, date: datetime, **context):
         """
         Simulates the Homemaker's role as a household financial manager.
         """
