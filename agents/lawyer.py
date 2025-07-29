@@ -129,4 +129,6 @@ class Lawyer(BaseAgent):
         self._handle_lumpy_income(date, events)
         self._handle_recurring_debits(date, events)
         self._handle_spending_and_investment(date, events)
+        # --- ADDED: Universal daily spending ---
+        self._handle_daily_living_expenses(date, events)
         return events

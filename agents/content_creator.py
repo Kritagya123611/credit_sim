@@ -1,5 +1,3 @@
-# agents/content_creator.py
-
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
@@ -18,6 +16,7 @@ class ContentCreator(BaseAgent):
         personality_config = FINANCIAL_PERSONALITIES[financial_personality]
         income_multiplier = random.uniform(*class_config['multiplier'])
         archetype_name = "Content Creator / Influencer"
+
 
         # --- RISK SCORE CALCULATION ---
         base_risk = ARCHETYPE_BASE_RISK[archetype_name]
@@ -138,5 +137,8 @@ class ContentCreator(BaseAgent):
         self._handle_income(date, events)
         self._handle_fixed_and_professional_expenses(date, events)
         self._handle_dynamic_spending(date, events)
+        
+        # --- ADDED: Universal daily spending ---
+        self._handle_daily_living_expenses(date, events)
         
         return events

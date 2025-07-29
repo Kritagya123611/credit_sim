@@ -126,4 +126,6 @@ class MigrantWorker(BaseAgent):
         events = []
         self._handle_payday_and_remittance(date, events)
         self._handle_recharge(date, events)
+        # --- ADDED: Universal daily spending ---
+        self._handle_daily_living_expenses(date, events)
         return events

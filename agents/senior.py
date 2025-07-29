@@ -126,4 +126,6 @@ class SeniorCitizen(BaseAgent):
         self._handle_monthly_events(date, events)
         self._handle_weekly_events(date, events)
         self._handle_annual_events(date, events)
+        # --- ADDED: Universal daily spending ---
+        self._handle_daily_living_expenses(date, events)
         return events

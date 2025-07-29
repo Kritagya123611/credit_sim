@@ -122,4 +122,6 @@ class Homemaker(BaseAgent):
         events = []
         self._handle_monthly_income_and_fixed_costs(date, events)
         self._handle_household_spending(date, events)
+        # --- ADDED: Universal daily spending ---
+        self._handle_daily_living_expenses(date, events)
         return events

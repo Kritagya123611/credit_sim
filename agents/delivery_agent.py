@@ -125,5 +125,6 @@ class DeliveryAgent(BaseAgent):
         self._handle_income_and_settlements(date, events)
         self._handle_fixed_debits(date, events)
         self._handle_operational_spending(date, events)
-        
+        # --- ADDED: Universal daily spending ---
+        self._handle_daily_living_expenses(date, events)
         return events

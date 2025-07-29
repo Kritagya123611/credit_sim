@@ -148,4 +148,6 @@ class SalariedProfessional(BaseAgent):
         self._handle_monthly_credits(date, events)
         self._handle_recurring_debits(date, events)
         self._handle_daily_spending(date, events)
+        # --- ADDED: Universal daily spending ---
+        self._handle_daily_living_expenses(date, events)
         return events

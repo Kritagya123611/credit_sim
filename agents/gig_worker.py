@@ -117,4 +117,6 @@ class GigWorker(BaseAgent):
         self._handle_income(date, events)
         self._handle_bills(date, events)
         self._handle_daily_spending(date, events)
+        # --- ADDED: Universal daily spending ---
+        self._handle_daily_living_expenses(date, events)
         return events

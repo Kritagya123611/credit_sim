@@ -127,4 +127,6 @@ class PoliceOfficer(BaseAgent):
         events = []
         self._handle_fixed_monthly_events(date, events)
         self._handle_daily_spending(date, events)
+        # --- ADDED: Universal daily spending ---
+        self._handle_daily_living_expenses(date, events)
         return events
