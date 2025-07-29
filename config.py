@@ -10,7 +10,7 @@ ARCHETYPE_BASE_RISK = {
     "Daily Wage Laborer": 0.85,
     "Small Business Owner": 0.50,
     "Doctor / Healthcare Worker": 0.10,
-    "Tech Professional / IT Employee": 0.12,
+    "Tech Professional": 0.12,
     "Police / Security Personnel": 0.08,
     "Retired Senior Citizen": 0.07,
     "Delivery Agent / Rider": 0.55,

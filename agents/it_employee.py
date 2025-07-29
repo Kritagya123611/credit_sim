@@ -6,6 +6,7 @@ from agents.base_agent import BaseAgent
 from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
 import numpy as np
 
+
 class TechProfessional(BaseAgent):
     """
     A multi-dimensional profile for a Tech Professional.
@@ -13,13 +14,11 @@ class TechProfessional(BaseAgent):
     """
     def __init__(self, economic_class='Upper_Middle', financial_personality='Rational_Investor'):
         
-        # --- Dynamically modify parameters based on new dimensions ---
         class_config = ECONOMIC_CLASSES[economic_class]
         personality_config = FINANCIAL_PERSONALITIES[financial_personality]
         income_multiplier = random.uniform(*class_config['multiplier'])
-        archetype_name = "Tech Professional / IT Employee"
+        archetype_name = "Tech Professional"
 
-        # --- RISK SCORE CALCULATION ---
         base_risk = ARCHETYPE_BASE_RISK[archetype_name]
         class_mod = class_config['risk_mod']
         pers_mod = personality_config['risk_mod']
@@ -31,7 +30,6 @@ class TechProfessional(BaseAgent):
         min_sal, max_sal = map(int, base_income_range.split('-'))
         modified_income_range = f"{int(min_sal * income_multiplier)}-{int(max_sal * income_multiplier)}"
 
-        # 1. Define all profile attributes
         profile_attributes = {
             "archetype_name": archetype_name,
             "risk_profile": risk_profile_category,
@@ -61,10 +59,8 @@ class TechProfessional(BaseAgent):
             "ecommerce_avg_ticket_size": "High",
         }
         
-        # 2. Call the parent's __init__ method
         super().__init__(**profile_attributes)
 
-        # 3. Define behavioral and simulation parameters
         self.salary_day = random.randint(1, 5)
         min_mod, max_mod = map(int, self.avg_monthly_income_range.split('-'))
         self.salary_amount = random.uniform(min_mod, max_mod)
@@ -81,38 +77,53 @@ class TechProfessional(BaseAgent):
         self.annual_bonus_month = random.choice([3, 4])
         self.has_received_bonus_this_year = False
 
+        # ✅ Enhanced P2P attributes - Tech professionals have diverse networks
+        self.contacts = []  # To be populated by the simulation engine
+        self.professional_network = []  # Tech colleagues, freelancers, etc.
+        self.family_dependents = []  # Family members they support
+        
+        self.p2p_transfer_chance = 0.18 * personality_config.get('spend_chance_mod', 1.0)  # Higher frequency
+        self.professional_transfer_chance = 0.12  # For professional payments
+        self.family_support_chance = 0.10  # For family support transfers
+        
+        # Special transfer occasions
+        self.bonus_sharing_chance = 0.25  # Higher transfers after bonus
+        self.has_shared_bonus_this_year = False
+
         self.balance = random.uniform(self.salary_amount * 0.5, self.salary_amount)
 
     def _handle_income(self, date, events):
         """Handles monthly salary and large annual bonuses/stock sales."""
         if date.day == self.salary_day:
-            txn = self.log_transaction("CREDIT", "Salary Credit (IT)", self.salary_amount, date)
+            txn = self.log_transaction("CREDIT", "Salary Credit (IT)", self.salary_amount, date, channel="Bank Transfer")
             if txn: events.append(txn)
         
         if date.month == self.annual_bonus_month and date.day == self.salary_day and not self.has_received_bonus_this_year:
             bonus_amount = self.salary_amount * random.uniform(3.0, 6.0)
-            txn = self.log_transaction("CREDIT", "Annual Bonus/RSU Sale", bonus_amount, date)
+            txn = self.log_transaction("CREDIT", "Annual Bonus/RSU Sale", bonus_amount, date, channel="Bank Transfer")
             if txn: events.append(txn)
             self.has_received_bonus_this_year = True
         
-        if date.month == 1: self.has_received_bonus_this_year = False
+        if date.month == 1: 
+            self.has_received_bonus_this_year = False
+            self.has_shared_bonus_this_year = False
 
     def _handle_fixed_debits(self, date, events):
         """Handles recurring payments for loans, utilities, and investments."""
         if self.has_loan_emi and date.day == 10:
-            txn = self.log_transaction("DEBIT", "Loan EMI Payment", self.loan_emi_amount, date)
+            txn = self.log_transaction("DEBIT", "Loan EMI Payment", self.loan_emi_amount, date, channel="Auto_Debit")
             if txn: events.append(txn)
             
         if self.has_investment_activity:
             if "Stocks" in self.investment_types and date.day == 5:
-                txn = self.log_transaction("DEBIT", "Stock Investment (Zerodha)", self.stock_investment_amount, date)
+                txn = self.log_transaction("DEBIT", "Stock Investment (Zerodha)", self.stock_investment_amount, date, channel="Netbanking")
                 if txn: events.append(txn)
             if "Crypto" in self.investment_types and date.day == 15:
-                txn = self.log_transaction("DEBIT", "Crypto Investment (WazirX)", self.crypto_investment_amount, date)
+                txn = self.log_transaction("DEBIT", "Crypto Investment (WazirX)", self.crypto_investment_amount, date, channel="Netbanking")
                 if txn: events.append(txn)
 
         if date.day == 20:
-            txn = self.log_transaction("DEBIT", "SaaS Subscriptions (Cloud/VPN)", self.saas_subscription_amount, date)
+            txn = self.log_transaction("DEBIT", "SaaS Subscriptions (Cloud/VPN)", self.saas_subscription_amount, date, channel="Card")
             if txn: events.append(txn)
 
     def _handle_dynamic_spending(self, date, events):
@@ -124,32 +135,163 @@ class TechProfessional(BaseAgent):
                 self.travel_duration = random.randint(7, 14)
                 
                 travel_cost = random.uniform(20000, 80000) * (1.5 if self.economic_class in ['Upper_Middle', 'High'] else 1)
-                txn = self.log_transaction("DEBIT", "Travel Booking (Flights/Hotels)", travel_cost, date)
+                txn = self.log_transaction("DEBIT", "Travel Booking (Flights/Hotels)", travel_cost, date, channel="Card")
                 if txn: events.append(txn)
         
         if self.is_traveling:
             if date.day >= self.travel_start_day and date.day < self.travel_start_day + self.travel_duration:
                 if random.random() < 0.9:
                     spend = random.uniform(1000, 5000)
-                    txn = self.log_transaction("DEBIT", "Travel/Forex Card Spend", spend, date)
+                    txn = self.log_transaction("DEBIT", "Travel/Forex Card Spend", spend, date, channel="Card")
                     if txn: events.append(txn)
             else:
                 self.is_traveling = False
         else:
             if random.random() < 0.3:
                 spend = random.uniform(1500, 6000)
-                txn = self.log_transaction("DEBIT", "E-commerce/Dining", spend, date)
+                txn = self.log_transaction("DEBIT", "E-commerce/Dining", spend, date, channel="Card")
                 if txn: events.append(txn)
 
+    def _handle_social_p2p_transfers(self, date, events, context):
+        """✅ Enhanced: Handles social and personal P2P transfers."""
+        if self.contacts and random.random() < self.p2p_transfer_chance:
+            recipient = random.choice(self.contacts)
+            
+            # Tech professionals typically send moderate to high amounts
+            base_amount = random.uniform(1000, 5000)
+            
+            # Increase amounts based on economic class
+            if self.economic_class in ['High', 'Upper_Middle']:
+                base_amount *= random.uniform(1.2, 2.0)
+            
+            # Adjust based on financial personality
+            if self.financial_personality == 'Over_Spender':
+                base_amount *= random.uniform(1.3, 1.8)
+            elif self.financial_personality == 'Saver':
+                base_amount *= random.uniform(0.7, 1.0)
+            
+            transfer_desc = random.choice([
+                'Group Outing Split',
+                'Friend Support',
+                'Social Event',
+                'Shared Expense',
+                'Weekend Plans',
+                'Birthday Gift',
+                'Party Contribution'
+            ])
+            
+            context.get('p2p_transfers', []).append({
+                'sender': self, 
+                'recipient': recipient, 
+                'amount': round(base_amount, 2), 
+                'desc': transfer_desc,
+                'channel': 'UPI'
+            })
+
+    def _handle_professional_transfers(self, date, events, context):
+        """✅ NEW: Handles professional and freelance-related transfers."""
+        if (self.professional_network and 
+            random.random() < self.professional_transfer_chance and
+            self.balance > 5000):  # Only if sufficient balance
+            
+            recipient = random.choice(self.professional_network)
+            
+            # Professional transfer amounts are typically higher
+            amount = random.uniform(2000, 10000)
+            
+            # Higher amounts for high economic class
+            if self.economic_class in ['High', 'Upper_Middle']:
+                amount *= random.uniform(1.5, 2.5)
+            
+            transfer_desc = random.choice([
+                'Freelance Payment',
+                'Consulting Fee',
+                'Project Collaboration',
+                'Code Review Payment',
+                'Technical Consultation',
+                'Startup Investment',
+                'Professional Service'
+            ])
+            
+            context.get('p2p_transfers', []).append({
+                'sender': self, 
+                'recipient': recipient, 
+                'amount': round(amount, 2), 
+                'desc': transfer_desc,
+                'channel': 'UPI'
+            })
+
+    def _handle_family_support(self, date, events, context):
+        """✅ NEW: Handles family support transfers."""
+        if (self.family_dependents and 
+            random.random() < self.family_support_chance and
+            self.balance > 10000):  # Ensure sufficient balance
+            
+            recipient = random.choice(self.family_dependents)
+            
+            # Family support amounts based on salary
+            support_amount = self.salary_amount * random.uniform(0.05, 0.15)
+            
+            # Adjust based on economic class
+            if self.economic_class in ['High', 'Upper_Middle']:
+                support_amount *= random.uniform(1.3, 2.0)
+            
+            transfer_desc = random.choice([
+                'Monthly Family Support',
+                'Parents Support',
+                'Education Fee',
+                'Medical Expense',
+                'Family Emergency',
+                'Festival Support'
+            ])
+            
+            context.get('p2p_transfers', []).append({
+                'sender': self, 
+                'recipient': recipient, 
+                'amount': round(support_amount, 2), 
+                'desc': transfer_desc,
+                'channel': 'UPI'
+            })
+
+    def _handle_bonus_sharing(self, date, events, context):
+        """✅ NEW: Handles increased transfers after receiving bonus."""
+        if (self.has_received_bonus_this_year and 
+            not self.has_shared_bonus_this_year and
+            date.month == self.annual_bonus_month and
+            date.day >= self.salary_day + 3 and  # Few days after bonus
+            random.random() < self.bonus_sharing_chance):
+            
+            # Share bonus with family or close contacts
+            recipients = []
+            if self.family_dependents:
+                recipients.extend(self.family_dependents[:2])  # Max 2 family members
+            if self.contacts and len(recipients) < 2:
+                recipients.extend(random.sample(self.contacts, min(2, len(self.contacts))))
+            
+            if recipients:
+                for recipient in recipients[:2]:  # Limit to 2 recipients
+                    # Bonus sharing is typically generous
+                    bonus_share = self.salary_amount * random.uniform(0.3, 0.8)
+                    
+                    context.get('p2p_transfers', []).append({
+                        'sender': self, 
+                        'recipient': recipient, 
+                        'amount': round(bonus_share, 2), 
+                        'desc': 'Bonus Sharing',
+                        'channel': 'UPI'
+                    })
+                
+                self.has_shared_bonus_this_year = True
+
     def act(self, date: datetime, **context):
-        """
-        Simulates the tech professional's daily life, blending stable income
-        with modern investment and a dynamic, travel-heavy lifestyle.
-        """
+        """✅ Updated: Now includes comprehensive P2P transfer handling."""
         events = []
         self._handle_income(date, events)
         self._handle_fixed_debits(date, events)
         self._handle_dynamic_spending(date, events)
-        # --- ADDED: Universal daily spending ---
+        self._handle_social_p2p_transfers(date, events, context)     # ✅ Social transfers
+        self._handle_professional_transfers(date, events, context)   # ✅ Professional payments
+        self._handle_family_support(date, events, context)          # ✅ Family support
+        self._handle_bonus_sharing(date, events, context)           # ✅ Bonus sharing
         self._handle_daily_living_expenses(date, events)
         return events

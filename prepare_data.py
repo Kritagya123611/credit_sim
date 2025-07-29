@@ -47,7 +47,7 @@ simulation_params_to_drop = [
     'invest_chance_mod', 'consultation_chance', 'avg_consultation_fee', 
     'large_payout_chance', 'clinic_rent_amount', 'sip_amount', 'high_end_spend_chance', 
     'is_active', 'behavior_state', 'creation_date', 'bust_out_day_threshold', 
-    'device_id', 'ip_address', 'cash_out_threshold'
+    'cash_out_threshold'
 ]
 
 # Combine all columns to be dropped into a single list

@@ -6,6 +6,7 @@ from agents.base_agent import BaseAgent
 from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
 import numpy as np
 
+
 class Lawyer(BaseAgent):
     """
     A multi-dimensional profile for a Lawyer or Consultant.
@@ -13,13 +14,11 @@ class Lawyer(BaseAgent):
     """
     def __init__(self, economic_class='Middle', financial_personality='Rational_Investor'):
         
-        # --- Dynamically modify parameters based on new dimensions ---
         class_config = ECONOMIC_CLASSES[economic_class]
         personality_config = FINANCIAL_PERSONALITIES[financial_personality]
         income_multiplier = random.uniform(*class_config['multiplier'])
         archetype_name = "Lawyer / Consultant"
 
-        # --- RISK SCORE CALCULATION ---
         base_risk = ARCHETYPE_BASE_RISK[archetype_name]
         class_mod = class_config['risk_mod']
         pers_mod = personality_config['risk_mod']
@@ -31,7 +30,6 @@ class Lawyer(BaseAgent):
         min_monthly, max_monthly = map(int, base_income_range.split('-'))
         modified_income_range = f"{int(min_monthly * income_multiplier)}-{int(max_monthly * income_multiplier)}"
 
-        # 1. Define all profile attributes
         profile_attributes = {
             "archetype_name": archetype_name,
             "risk_profile": risk_profile_category,
@@ -60,11 +58,9 @@ class Lawyer(BaseAgent):
             "ecommerce_activity_level": "Medium",
             "ecommerce_avg_ticket_size": "High",
         }
-
-        # 2. Call the parent's __init__ method
+        
         super().__init__(**profile_attributes)
 
-        # 3. Define behavioral and simulation parameters
         min_mod, max_mod = map(int, self.avg_monthly_income_range.split('-'))
         avg_monthly = (min_mod + max_mod) / 2
 
@@ -79,30 +75,116 @@ class Lawyer(BaseAgent):
         self.spend_chance_mod = personality_config['spend_chance_mod']
         self.invest_chance_mod = personality_config['invest_chance_mod']
         
+        # ✅ Updated P2P attributes - Lawyers have professional and personal networks
+        self.professional_network = []  # To be populated by simulation engine
+        self.junior_associate = None    # Single junior/associate for retainer payments
+        self.p2p_transfer_chance = 0.12 * personality_config.get('spend_chance_mod', 1.0)  # Moderate frequency
+        
+        # Professional payment cycles
+        self.retainer_payment_day = 5
+        self.professional_transfer_chance = 0.08  # Additional professional transfers
+
         self.balance = random.uniform(avg_monthly * 1.5, avg_monthly * 3.0)
 
     def _handle_lumpy_income(self, date, events):
         """Simulates receiving large, infrequent payments."""
         if date.month in self.payout_months and date.day == 15:
             payout = self.lump_sum_payment * random.uniform(0.8, 1.2)
-            txn = self.log_transaction("CREDIT", "Client/Project Fee Received", payout, date)
+            txn = self.log_transaction("CREDIT", "Client/Project Fee Received", payout, date, channel="Bank Transfer")
             if txn:
                 events.append(txn)
                 self.has_large_cash_reserve = True
 
     def _handle_recurring_debits(self, date, events):
-        """Handles regular monthly and annual professional/personal expenses."""
-        if date.day == 5:
-            txn = self.log_transaction("DEBIT", "Junior/Retainer Fee", self.junior_retainer_fee, date)
-            if txn: events.append(txn)
-
+        """✅ Updated: Handles regular monthly expenses (non-P2P)."""
         if self.has_loan_emi and date.day == 10:
-            txn = self.log_transaction("DEBIT", "Loan EMI Payment", self.loan_emi_amount, date)
+            txn = self.log_transaction("DEBIT", "Loan EMI Payment", self.loan_emi_amount, date, channel="Auto_Debit")
             if txn: events.append(txn)
 
         if self.has_insurance_payments and date.month == 7 and date.day == 20:
-            txn = self.log_transaction("DEBIT", "Professional Indemnity Insurance", self.prof_indemnity_premium, date)
+            txn = self.log_transaction("DEBIT", "Professional Indemnity Insurance", self.prof_indemnity_premium, date, channel="Netbanking")
             if txn: events.append(txn)
+
+    def _handle_professional_payments(self, date, events, context):
+        """✅ NEW: Handles regular retainer and professional payments."""
+        # Monthly retainer payment to junior associate
+        if date.day == self.retainer_payment_day and self.junior_associate:
+            context.get('p2p_transfers', []).append({
+                'sender': self,
+                'recipient': self.junior_associate,
+                'amount': self.junior_retainer_fee,
+                'desc': 'Junior/Retainer Fee',
+                'channel': 'UPI'
+            })
+
+    def _handle_p2p_transfers(self, date, events, context):
+        """✅ NEW: Handles general professional and personal transfers."""
+        if self.professional_network and random.random() < self.p2p_transfer_chance:
+            recipient = random.choice(self.professional_network)
+            
+            # Lawyers typically send higher amounts in professional context
+            base_amount = random.uniform(2000, 8000)
+            
+            # Increase amounts if they have large cash reserves
+            if self.has_large_cash_reserve:
+                base_amount *= random.uniform(1.2, 2.0)
+            
+            # Adjust based on economic class
+            if self.economic_class in ['High', 'Upper_Middle']:
+                base_amount *= random.uniform(1.3, 2.0)
+            elif self.economic_class in ['Lower', 'Lower_Middle']:
+                base_amount *= random.uniform(0.6, 0.8)
+            
+            transfer_desc = random.choice([
+                'Professional Payment', 
+                'Client Refund', 
+                'Colleague Support', 
+                'Business Expense',
+                'Professional Fee',
+                'Consultation Payment',
+                'Legal Service Fee'
+            ])
+            
+            context.get('p2p_transfers', []).append({
+                'sender': self, 
+                'recipient': recipient, 
+                'amount': round(base_amount, 2), 
+                'desc': transfer_desc,
+                'channel': 'UPI'
+            })
+
+    def _handle_professional_networking(self, date, events, context):
+        """✅ NEW: Handles additional professional network transfers."""
+        # Additional professional transfers (referral fees, shared costs, etc.)
+        if (self.professional_network and 
+            random.random() < self.professional_transfer_chance and 
+            self.balance > 10000):  # Only if sufficient balance
+            
+            recipient = random.choice(self.professional_network)
+            
+            # Professional networking amounts are typically moderate
+            amount = random.uniform(1500, 5000)
+            
+            # Higher amounts during large cash reserve periods
+            if self.has_large_cash_reserve:
+                amount *= random.uniform(1.5, 2.5)
+            
+            transfer_desc = random.choice([
+                'Referral Fee', 
+                'Shared Office Expense', 
+                'Conference Cost Share',
+                'Professional Development',
+                'Bar Association Fee',
+                'Joint Case Expense'
+            ])
+            
+            context.get('p2p_transfers', []).append({
+                'sender': self, 
+                'recipient': recipient, 
+                'amount': round(amount, 2), 
+                'desc': transfer_desc,
+                'channel': 'UPI'
+            })
 
     def _handle_spending_and_investment(self, date, events):
         """Simulates spending and large investments, often after a payout."""
@@ -110,25 +192,25 @@ class Lawyer(BaseAgent):
             if self.has_investment_activity and random.random() < (0.5 * self.invest_chance_mod):
                 investment_amount = self.balance * random.uniform(0.3, 0.6)
                 investment_type = random.choice(self.investment_types)
-                txn = self.log_transaction("DEBIT", f"Lump-Sum Investment - {investment_type}", investment_amount, date)
+                txn = self.log_transaction("DEBIT", f"Lump-Sum Investment - {investment_type}", investment_amount, date, channel="Netbanking")
                 if txn:
                     events.append(txn)
                     self.has_large_cash_reserve = False
 
         if random.random() < (0.4 * self.spend_chance_mod):
-            spend_category = random.choice(["Fine Dining", "Travel Booking", "Professional Books"])
+            spend_category = random.choice(["Fine Dining", "Travel Booking", "Professional Books", "Legal Software", "Court Fees"])
             amount = random.uniform(1000, 8000)
-            txn = self.log_transaction("DEBIT", f"Card Spend - {spend_category}", amount, date)
+            txn = self.log_transaction("DEBIT", f"Card Spend - {spend_category}", amount, date, channel="Card")
             if txn: events.append(txn)
 
     def act(self, date: datetime, **context):
-        """
-        Simulates the lawyer's "feast or famine" financial cycle.
-        """
+        """✅ Updated: Now includes comprehensive P2P transfer handling."""
         events = []
         self._handle_lumpy_income(date, events)
         self._handle_recurring_debits(date, events)
+        self._handle_professional_payments(date, events, context)    # ✅ Regular professional payments
+        self._handle_p2p_transfers(date, events, context)            # ✅ General P2P transfers
+        self._handle_professional_networking(date, events, context)  # ✅ Professional networking transfers
         self._handle_spending_and_investment(date, events)
-        # --- ADDED: Universal daily spending ---
         self._handle_daily_living_expenses(date, events)
         return events

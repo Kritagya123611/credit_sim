@@ -1,5 +1,3 @@
-# agents/doctor.py
-
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
@@ -13,13 +11,11 @@ class Doctor(BaseAgent):
     """
     def __init__(self, economic_class='Upper_Middle', financial_personality='Rational_Investor'):
         
-        # --- Dynamically modify parameters based on new dimensions ---
         class_config = ECONOMIC_CLASSES[economic_class]
         personality_config = FINANCIAL_PERSONALITIES[financial_personality]
         income_multiplier = random.uniform(*class_config['multiplier'])
         archetype_name = "Doctor / Healthcare Worker"
 
-        # --- RISK SCORE CALCULATION ---
         base_risk = ARCHETYPE_BASE_RISK[archetype_name]
         class_mod = class_config['risk_mod']
         pers_mod = personality_config['risk_mod']
@@ -31,7 +27,6 @@ class Doctor(BaseAgent):
         min_inc, max_inc = map(int, base_income_range.split('-'))
         modified_income_range = f"{int(min_inc * income_multiplier)}-{int(max_inc * income_multiplier)}"
 
-        # 1. Define all profile attributes
         profile_attributes = {
             "archetype_name": archetype_name,
             "risk_profile": risk_profile_category,
@@ -61,10 +56,8 @@ class Doctor(BaseAgent):
             "ecommerce_avg_ticket_size": "High",
         }
         
-        # 2. Call the parent's __init__ method
         super().__init__(**profile_attributes)
 
-        # 3. Define behavioral and simulation parameters
         min_mod, max_mod = map(int, self.avg_monthly_income_range.split('-'))
         self.avg_monthly_income = (min_mod + max_mod) / 2
 
@@ -76,59 +69,67 @@ class Doctor(BaseAgent):
         self.sip_amount = self.avg_monthly_income * 0.25 * personality_config['invest_chance_mod']
         self.loan_emi_amount = self.avg_monthly_income * 0.30
         self.prof_indemnity_premium = self.avg_monthly_income * 0.5
-
         self.high_end_spend_chance = 0.10 * personality_config['spend_chance_mod']
+        
+        self.service_providers = [] 
+        self.p2p_payment_chance = 0.2 
 
         self.balance = random.uniform(self.avg_monthly_income, self.avg_monthly_income * 2)
 
     def _handle_income(self, date, events):
-        """Simulates a mix of regular consultation fees and large, lumpy payouts."""
         if date.weekday() < 5 and random.random() < self.consultation_chance:
             daily_consult_income = self.avg_consultation_fee * random.uniform(0.8, 1.2)
-            txn = self.log_transaction("CREDIT", "Daily Consultation Fees", daily_consult_income, date)
+            txn = self.log_transaction("CREDIT", "Daily Consultation Fees", daily_consult_income, date, channel="UPI")
             if txn: events.append(txn)
         
         if date.day == 15 and random.random() < self.large_payout_chance:
             payout_amount = self.avg_monthly_income * random.uniform(1.5, 3.0)
             source = random.choice(["Gateway Payout", "Surgery Fee"])
-            txn = self.log_transaction("CREDIT", source, payout_amount, date)
+            txn = self.log_transaction("CREDIT", source, payout_amount, date, channel="Bank Transfer")
             if txn: events.append(txn)
 
     def _handle_professional_and_fixed_expenses(self, date, events):
-        """Simulates paying for clinic rent, EMIs, investments, and insurance."""
         if date.day == 5:
-            txn = self.log_transaction("DEBIT", "Clinic Rent", self.clinic_rent_amount, date)
+            txn = self.log_transaction("DEBIT", "Clinic Rent", self.clinic_rent_amount, date, channel="Netbanking")
             if txn: events.append(txn)
 
         if self.has_loan_emi and date.day == 10:
-            txn = self.log_transaction("DEBIT", "Loan EMI Payment", self.loan_emi_amount, date)
+            txn = self.log_transaction("DEBIT", "Loan EMI Payment", self.loan_emi_amount, date, channel="Auto_Debit")
             if txn: events.append(txn)
             
         if self.has_investment_activity and date.day == 15:
-            txn = self.log_transaction("DEBIT", "Mutual Fund SIP", self.sip_amount, date)
+            txn = self.log_transaction("DEBIT", "Mutual Fund SIP", self.sip_amount, date, channel="Auto_Debit")
             if txn: events.append(txn)
 
         if self.has_insurance_payments and date.month == 6 and date.day == 20:
-             txn = self.log_transaction("DEBIT", "Professional Indemnity Insurance", self.prof_indemnity_premium, date)
+             txn = self.log_transaction("DEBIT", "Professional Indemnity Insurance", self.prof_indemnity_premium, date, channel="Netbanking")
              if txn: events.append(txn)
 
     def _handle_discretionary_spending(self, date, events):
-        """Simulates high-end lifestyle spending."""
         if random.random() < self.high_end_spend_chance:
             spend_category = random.choice(["Fine Dining", "Luxury Goods", "Travel Booking", "Electronics"])
             spend_amount = random.uniform(5000, 25000)
-            txn = self.log_transaction("DEBIT", f"Card Spend - {spend_category}", spend_amount, date)
+            txn = self.log_transaction("DEBIT", f"Card Spend - {spend_category}", spend_amount, date, channel="Card")
             if txn: events.append(txn)
 
+    def _handle_p2p_payments(self, date, events, context):
+        if date.day == 25 and self.service_providers and random.random() < self.p2p_payment_chance:
+            provider = random.choice(self.service_providers)
+            amount = self.avg_monthly_income * random.uniform(0.1, 0.2)
+            
+            context.get('p2p_transfers', []).append({
+                'sender': self, 
+                'recipient': provider, 
+                'amount': amount, 
+                'desc': 'Professional Service Fee',
+                'channel': 'P2P' # Specifying channel for clarity
+            })
+
     def act(self, date: datetime, **context):
-        """
-        Simulates the doctor's complex financial life, balancing regular outgoings
-        with lumpy professional income.
-        """
         events = []
         self._handle_income(date, events)
         self._handle_professional_and_fixed_expenses(date, events)
         self._handle_discretionary_spending(date, events)
-        # --- ADDED: Universal daily spending ---
+        self._handle_p2p_payments(date, events, context)
         self._handle_daily_living_expenses(date, events)
         return events

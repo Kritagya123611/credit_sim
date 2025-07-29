@@ -6,6 +6,7 @@ from agents.base_agent import BaseAgent
 from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
 import numpy as np
 
+
 class SeniorCitizen(BaseAgent):
     """
     A multi-dimensional profile for a Retired Senior Citizen.
@@ -13,13 +14,11 @@ class SeniorCitizen(BaseAgent):
     """
     def __init__(self, economic_class='Lower_Middle', financial_personality='Saver'):
         
-        # --- Dynamically modify parameters based on new dimensions ---
         class_config = ECONOMIC_CLASSES[economic_class]
         personality_config = FINANCIAL_PERSONALITIES[financial_personality]
         income_multiplier = random.uniform(*class_config['multiplier'])
         archetype_name = "Retired Senior Citizen"
 
-        # --- RISK SCORE CALCULATION ---
         base_risk = ARCHETYPE_BASE_RISK[archetype_name]
         class_mod = class_config['risk_mod']
         pers_mod = personality_config['risk_mod']
@@ -31,40 +30,37 @@ class SeniorCitizen(BaseAgent):
         min_income, max_income = map(int, base_income_range.split('-'))
         modified_income_range = f"{int(min_income * income_multiplier)}-{int(max_income * income_multiplier)}"
 
-        # 1. Define all profile attributes
         profile_attributes = {
-            "archetype_name": archetype_name,
-            "risk_profile": risk_profile_category,
+            "archetype_name": archetype_name, 
+            "risk_profile": risk_profile_category, 
             "risk_score": risk_score,
-            "economic_class": economic_class,
+            "economic_class": economic_class, 
             "financial_personality": financial_personality,
-            "employment_status": "Not_Applicable",
+            "employment_status": "Not_Applicable", 
             "employment_verification": "Pensioner_ID_Verified",
-            "income_type": "Pension, Rent",
+            "income_type": "Pension, Rent", 
             "avg_monthly_income_range": modified_income_range,
-            "income_pattern": "Fixed_Date",
+            "income_pattern": "Fixed_Date", 
             "savings_retention_rate": "High",
-            "has_investment_activity": True,
+            "has_investment_activity": True, 
             "investment_types": ["FD", "Senior_Citizen_Schemes"],
-            "has_loan_emi": False,
+            "has_loan_emi": False, 
             "loan_emi_payment_status": "N/A",
-            "has_insurance_payments": True,
+            "has_insurance_payments": True, 
             "insurance_types": ["Health"],
-            "utility_payment_status": "ALWAYS_ON_TIME",
+            "utility_payment_status": "ALWAYS_ON_TIME", 
             "mobile_plan_type": "Basic_Postpaid",
-            "device_consistency_score": 0.99,
-            "ip_consistency_score": 0.99,
+            "device_consistency_score": 0.99, 
+            "ip_consistency_score": 0.99, 
             "sim_churn_rate": "Low",
-            "primary_digital_channels": ["Netbanking", "Branch"],
+            "primary_digital_channels": ["Netbanking", "Branch"], 
             "login_pattern": "Infrequent",
-            "ecommerce_activity_level": "None",
+            "ecommerce_activity_level": "None", 
             "ecommerce_avg_ticket_size": "N/A",
         }
-
-        # 2. Call the parent's __init__ method
+        
         super().__init__(**profile_attributes)
 
-        # 3. Define behavioral and simulation parameters
         self.pension_day = 1
         min_mod, max_mod = map(int, self.avg_monthly_income_range.split('-'))
         self.monthly_income = random.uniform(min_mod, max_mod)
@@ -72,41 +68,48 @@ class SeniorCitizen(BaseAgent):
         self.insurance_percentage = 0.15
         self.utility_bill_percentage = 0.08
         
-        self.weekly_grocery_day = 4 # Friday
+        self.weekly_grocery_day = 4
         self.monthly_pharmacy_day = 10
 
         self.large_event_month = random.randint(1, 12)
         self.has_done_large_event_this_year = False
+        
+        # ✅ Updated P2P Logic - Senior citizens often send money to family
+        self.family_members = []  # To be populated by simulation engine
+        self.p2p_transfer_chance = 0.08 * personality_config.get('spend_chance_mod', 1.0)  # Lower frequency for seniors
+        
+        # Special occasions when seniors are more likely to send money
+        self.festival_months = [3, 10, 11]  # Holi, Diwali, etc.
 
         self.balance = random.uniform(self.monthly_income * 2.0, self.monthly_income * 5.0)
 
     def _handle_monthly_events(self, date, events):
         """Handles fixed monthly income and debits."""
         if date.day == self.pension_day:
-            txn = self.log_transaction("CREDIT", "Pension/Rent Deposit", self.monthly_income, date)
+            txn = self.log_transaction("CREDIT", "Pension/Rent Deposit", self.monthly_income, date, channel="Bank Transfer")
             if txn: events.append(txn)
             if date.month == 1: self.has_done_large_event_this_year = False
 
         if self.has_insurance_payments and date.day == 5:
             insurance_amt = self.monthly_income * self.insurance_percentage
-            txn = self.log_transaction("DEBIT", "Health Insurance Premium", insurance_amt, date)
+            txn = self.log_transaction("DEBIT", "Health Insurance Premium", insurance_amt, date, channel="Auto_Debit")
             if txn: events.append(txn)
 
         if date.day == self.monthly_pharmacy_day:
             pharma_spend = self.monthly_income * 0.05
-            txn = self.log_transaction("DEBIT", "Pharmacy/Medicines", pharma_spend, date)
+            txn = self.log_transaction("DEBIT", "Pharmacy/Medicines", pharma_spend, date, channel="Card")
             if txn: events.append(txn)
 
         if date.day == 20:
             bill = self.monthly_income * self.utility_bill_percentage
-            txn = self.log_transaction("DEBIT", "Utility Bill Payment", bill, date)
+            txn = self.log_transaction("DEBIT", "Utility Bill Payment", bill, date, channel="Netbanking")
             if txn: events.append(txn)
 
     def _handle_weekly_events(self, date, events):
         """Handles structured weekly spending, like for groceries."""
         if date.weekday() == self.weekly_grocery_day:
             grocery_spend = self.monthly_income * 0.08
-            txn = self.log_transaction("DEBIT", "Weekly Groceries/Essentials", grocery_spend, date)
+            txn = self.log_transaction("DEBIT", "Weekly Groceries/Essentials", grocery_spend, date, channel="Card")
             if txn: events.append(txn)
 
     def _handle_annual_events(self, date, events):
@@ -114,18 +117,75 @@ class SeniorCitizen(BaseAgent):
         if self.has_investment_activity and date.month == self.large_event_month and date.day == 25 and not self.has_done_large_event_this_year:
             fd_amount = self.balance * random.uniform(0.3, 0.5)
             if fd_amount > (10000 * (1 if self.economic_class in ['Lower', 'Lower_Middle'] else 2)):
-                txn = self.log_transaction("DEBIT", "New Fixed Deposit Creation", fd_amount, date)
+                txn = self.log_transaction("DEBIT", "New Fixed Deposit Creation", fd_amount, date, channel="Netbanking")
                 if txn: events.append(txn)
                 self.has_done_large_event_this_year = True
 
+    def _handle_p2p_transfers(self, date, events, context):
+        """✅ NEW: Simulates sending money to family members for support and special occasions."""
+        if self.family_members and random.random() < self.p2p_transfer_chance:
+            recipient = random.choice(self.family_members)
+            
+            # Senior citizens send moderate to higher amounts to family
+            base_amount = random.uniform(1000, 5000)
+            
+            # Increase amount during festival months
+            if date.month in self.festival_months:
+                base_amount *= random.uniform(1.5, 2.5)
+                transfer_desc = random.choice([
+                    'Festival Gift', 
+                    'Religious Ceremony', 
+                    'Special Occasion', 
+                    'Holiday Celebration'
+                ])
+            else:
+                transfer_desc = random.choice([
+                    'Family Support', 
+                    'Medical Help', 
+                    'Emergency Aid',
+                    'Monthly Support',
+                    'Grandchildren Gift',
+                    'Educational Support'
+                ])
+            
+            # Adjust amount based on economic class
+            if self.economic_class in ['High', 'Upper_Middle']:
+                base_amount *= random.uniform(1.2, 2.0)
+            elif self.economic_class in ['Lower', 'Lower_Middle']:
+                base_amount *= random.uniform(0.5, 0.8)
+            
+            context.get('p2p_transfers', []).append({
+                'sender': self, 
+                'recipient': recipient, 
+                'amount': round(base_amount, 2), 
+                'desc': transfer_desc,
+                'channel': 'UPI'  # Many seniors now use UPI for family transfers
+            })
+
+    def _handle_special_occasions(self, date, events, context):
+        """✅ NEW: Handles special occasion transfers like birthdays, festivals."""
+        # Increased P2P activity during festival months
+        if date.month in self.festival_months and date.day <= 5:
+            # Higher chance of sending money during festivals
+            if self.family_members and random.random() < (self.p2p_transfer_chance * 3):
+                recipient = random.choice(self.family_members)
+                festival_amount = self.monthly_income * random.uniform(0.15, 0.30)
+                
+                context.get('p2p_transfers', []).append({
+                    'sender': self, 
+                    'recipient': recipient, 
+                    'amount': round(festival_amount, 2), 
+                    'desc': 'Festival Blessing Money',
+                    'channel': 'UPI'
+                })
+
     def act(self, date: datetime, **context):
-        """
-        Simulates the agent's low-frequency and highly predictable financial life.
-        """
+        """✅ Updated: Now includes P2P transfer handling."""
         events = []
         self._handle_monthly_events(date, events)
         self._handle_weekly_events(date, events)
         self._handle_annual_events(date, events)
-        # --- ADDED: Universal daily spending ---
-        self._handle_daily_living_expenses(date, events)
+        self._handle_p2p_transfers(date, events, context)  # ✅ Added this line
+        self._handle_special_occasions(date, events, context)  # ✅ Added this line
+        self._handle_daily_living_expenses(date, events, daily_spend_chance=0.1)
         return events
