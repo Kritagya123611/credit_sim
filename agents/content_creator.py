@@ -1,14 +1,15 @@
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+from config_pkg import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
 import numpy as np
-
+from config_pkg.p2p_structure import RealisticP2PStructure  # ✅ NEW: Import for realistic P2P handling
 
 class ContentCreator(BaseAgent):
     """
     A multi-dimensional profile for a Content Creator.
     Behavior is modified by economic_class and financial_personality.
+    Updated with realistic P2P transaction handling.
     """
     def __init__(self, economic_class='Lower_Middle', financial_personality='Risk_Addict'):
         
@@ -78,11 +79,11 @@ class ContentCreator(BaseAgent):
         self.brand_contacts = []  # Brand representatives for payments
         self.freelancer_network = []  # Editors, designers, etc.
 
-        self.p2p_transfer_chance = 0.22 * personality_config.get('spend_chance_mod', 1.0)  # Higher frequency
-        self.collaboration_payment_chance = 0.18  # Paying collaborators
-        self.freelancer_payment_chance = 0.15  # Paying editors, designers
-        self.creator_support_chance = 0.08  # Supporting other creators
-        self.brand_advance_chance = 0.05  # Giving advances to brands/agencies
+        self.p2p_transfer_chance = 0.22 * personality_config.get('spend_chance_mod', 1.0)
+        self.collaboration_payment_chance = 0.18
+        self.freelancer_payment_chance = 0.15
+        self.creator_support_chance = 0.08
+        self.brand_advance_chance = 0.05
 
         # Track different payment cycles
         self.last_collaboration_payment_date = None
@@ -139,10 +140,10 @@ class ContentCreator(BaseAgent):
              if txn: events.append(txn)
 
     def _handle_collaboration_payments(self, date, events, context):
-        """✅ Enhanced: Handles payments to collaborators and partners."""
+        """✅ UPDATED: Handles payments to collaborators with realistic P2P channels."""
         if (self.collaborators and 
             random.random() < self.collaboration_payment_chance and
-            self.balance > 5000):  # Ensure sufficient balance
+            self.balance > 5000):
             
             collaborator = random.choice(self.collaborators)
             
@@ -157,25 +158,22 @@ class ContentCreator(BaseAgent):
             if self.economic_class in ['High', 'Upper_Middle']:
                 base_amount *= random.uniform(1.3, 2.0)
             
-            collaboration_type = random.choice([
-                'Video Collaboration Fee',
-                'Co-creator Payment',
-                'Guest Appearance Fee',
-                'Joint Content Revenue',
-                'Partnership Share',
-                'Collab Project Payment'
-            ])
+            # ✅ NEW: Select realistic channel based on amount
+            if base_amount > 50000:
+                channel = random.choice(['IMPS', 'NEFT', 'RTGS'])  # High amounts use traditional channels
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()  # Market-based selection
             
             context.get('p2p_transfers', []).append({
                 'sender': self, 
                 'recipient': collaborator, 
                 'amount': round(base_amount, 2), 
-                'desc': collaboration_type,
-                'channel': 'UPI'
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
             })
 
     def _handle_freelancer_payments(self, date, events, context):
-        """✅ NEW: Handles payments to editors, designers, and other freelancers."""
+        """✅ UPDATED: Handles payments to freelancers with realistic P2P channels."""
         if (self.freelancer_network and 
             date.day == self.monthly_freelancer_payment_day and
             random.random() < self.freelancer_payment_chance and
@@ -190,26 +188,22 @@ class ContentCreator(BaseAgent):
             if self.has_sponsorship_funds:
                 payment_amount *= random.uniform(1.2, 1.8)
             
-            freelancer_service = random.choice([
-                'Video Editing Fee',
-                'Graphic Design Payment',
-                'Thumbnail Creation',
-                'Content Writing Fee',
-                'Photography Payment',
-                'Audio Editing Fee',
-                'Animation Service'
-            ])
+            # ✅ NEW: Select realistic channel based on amount
+            if payment_amount > 50000:
+                channel = random.choice(['IMPS', 'NEFT'])
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()
             
             context.get('p2p_transfers', []).append({
                 'sender': self, 
                 'recipient': freelancer, 
                 'amount': round(payment_amount, 2), 
-                'desc': freelancer_service,
-                'channel': 'UPI'
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
             })
 
     def _handle_creator_network_transfers(self, date, events, context):
-        """✅ NEW: Handles transfers within creator community."""
+        """✅ UPDATED: Handles transfers within creator community with realistic channels."""
         if (self.creator_network and 
             random.random() < self.p2p_transfer_chance and
             self.balance > 2000):
@@ -229,30 +223,26 @@ class ContentCreator(BaseAgent):
             elif self.financial_personality == 'Saver':
                 base_amount *= random.uniform(0.6, 1.0)
             
-            transfer_desc = random.choice([
-                'Creator Support',
-                'Equipment Sharing',
-                'Joint Project Fund',
-                'Creator Emergency Help',
-                'Content Collaboration',
-                'Influencer Network Support',
-                'Creative Community Aid'
-            ])
+            # ✅ NEW: Select realistic channel
+            if base_amount > 50000:
+                channel = random.choice(['IMPS', 'NEFT'])
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()
             
             context.get('p2p_transfers', []).append({
                 'sender': self, 
                 'recipient': recipient, 
                 'amount': round(base_amount, 2), 
-                'desc': transfer_desc,
-                'channel': 'UPI'
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
             })
 
     def _handle_brand_advance_payments(self, date, events, context):
-        """✅ NEW: Handles advance payments to brands/agencies."""
+        """✅ UPDATED: Handles advance payments to brands with realistic channels."""
         if (self.brand_contacts and 
             random.random() < self.brand_advance_chance and
             self.balance > 10000 and
-            self.has_sponsorship_funds):  # Only when flush with cash
+            self.has_sponsorship_funds):
             
             brand_contact = random.choice(self.brand_contacts)
             
@@ -263,27 +253,27 @@ class ContentCreator(BaseAgent):
             if self.economic_class in ['High', 'Upper_Middle']:
                 advance_amount *= random.uniform(1.5, 2.5)
             
-            advance_desc = random.choice([
-                'Brand Campaign Advance',
-                'Sponsorship Prepayment',
-                'Marketing Agency Advance',
-                'Content Series Advance',
-                'Brand Partnership Deposit'
-            ])
+            # ✅ NEW: Select appropriate channel for larger amounts
+            if advance_amount > 100000:
+                channel = random.choice(['NEFT', 'RTGS'])
+            elif advance_amount > 50000:
+                channel = random.choice(['IMPS', 'NEFT'])
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()
             
             context.get('p2p_transfers', []).append({
                 'sender': self, 
                 'recipient': brand_contact, 
                 'amount': round(advance_amount, 2), 
-                'desc': advance_desc,
-                'channel': 'UPI'
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
             })
 
     def _handle_creator_support_activities(self, date, events, context):
-        """✅ NEW: Handles supporting other creators during tough times."""
+        """✅ UPDATED: Handles supporting other creators with realistic channels."""
         if (self.creator_network and 
             random.random() < self.creator_support_chance and
-            self.balance > 8000):  # Need good balance for support activities
+            self.balance > 8000):
             
             recipient = random.choice(self.creator_network)
             
@@ -298,33 +288,30 @@ class ContentCreator(BaseAgent):
             if self.financial_personality == 'Risk_Addict':
                 support_amount *= random.uniform(1.2, 1.6)
             
-            support_desc = random.choice([
-                'Creator Emergency Fund',
-                'Equipment Help',
-                'Channel Boost Support',
-                'Creative Crisis Help',
-                'Influencer Solidarity',
-                'Community Support Fund'
-            ])
+            # ✅ NEW: Select realistic channel
+            if support_amount > 50000:
+                channel = random.choice(['IMPS', 'NEFT'])
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()
             
             context.get('p2p_transfers', []).append({
                 'sender': self, 
                 'recipient': recipient, 
                 'amount': round(support_amount, 2), 
-                'desc': support_desc,
-                'channel': 'UPI'
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
             })
 
     def act(self, date: datetime, **context):
-        """✅ Updated: Now includes comprehensive P2P transfer handling."""
+        """✅ Updated: Now includes comprehensive P2P transfer handling with realistic channels."""
         events = []
         self._handle_income(date, events)
         self._handle_fixed_and_professional_expenses(date, events)
         self._handle_dynamic_spending(date, events)
-        self._handle_collaboration_payments(date, events, context)      # ✅ Enhanced collaboration payments
-        self._handle_freelancer_payments(date, events, context)         # ✅ Monthly freelancer payments
-        self._handle_creator_network_transfers(date, events, context)   # ✅ Creator community transfers
-        self._handle_brand_advance_payments(date, events, context)      # ✅ Brand advance payments
-        self._handle_creator_support_activities(date, events, context)  # ✅ Creator support activities
+        self._handle_collaboration_payments(date, events, context)      # ✅ Updated with realistic channels
+        self._handle_freelancer_payments(date, events, context)         # ✅ Updated with realistic channels
+        self._handle_creator_network_transfers(date, events, context)   # ✅ Updated with realistic channels
+        self._handle_brand_advance_payments(date, events, context)      # ✅ Updated with realistic channels
+        self._handle_creator_support_activities(date, events, context)  # ✅ Updated with realistic channels
         self._handle_daily_living_expenses(date, events)
         return events

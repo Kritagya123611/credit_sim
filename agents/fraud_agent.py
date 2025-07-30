@@ -1,8 +1,7 @@
-# agents/fraud_agent.py
-
 import random
 from datetime import datetime, timedelta
 from agents.base_agent import BaseAgent
+from config_pkg.p2p_structure import RealisticP2PStructure  # ✅ NEW: Import for realistic P2P handling
 
 # --- UPDATED IMPORTS: All 15 legitimate agent classes are now available to be mimicked ---
 from agents.salaried import SalariedProfessional
@@ -25,6 +24,7 @@ class FraudAgent(BaseAgent):
     """
     An enhanced fraud agent that mimics a legitimate agent profile to hide,
     forcing detection to rely on graph patterns rather than profile features.
+    Updated with realistic P2P transaction handling.
     """
     def __init__(self, fraud_type: str, **fraud_params):
         
@@ -64,6 +64,7 @@ class FraudAgent(BaseAgent):
             return []
 
         events = []
+        
         if self.fraud_type == 'ring':
             ring_members = context.get('ring_members', [])
             if len(ring_members) > 1 and random.random() < 0.3:
@@ -73,13 +74,22 @@ class FraudAgent(BaseAgent):
                 
                 amount = self.balance * random.uniform(0.1, 0.3)
                 
+                # ✅ UPDATED: Select realistic channel based on amount and fraud pattern
+                if amount > 50000:
+                    # High amounts might use traditional channels to appear legitimate
+                    channel = random.choice(['IMPS', 'NEFT'])
+                else:
+                    # Most fraud rings use UPI for speed
+                    channel = 'UPI'
+                
                 # The agent NO LONGER logs its own debit.
                 # It ONLY adds a request to the P2P transfer queue for the engine to process.
                 context.get('p2p_transfers', []).append({
                     'sender': self, 
                     'recipient': recipient, 
                     'amount': amount, 
-                    'desc': 'P2P Ring Transfer'
+                    'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                    'channel': channel  # ✅ Realistic channel
                 })
                     
         elif self.fraud_type == 'bust_out':
@@ -87,6 +97,7 @@ class FraudAgent(BaseAgent):
             
             if self.behavior_state == 'building_credit':
                 if days_active < self.bust_out_day_threshold:
+                    # ✅ UPDATED: Build credit with small, normal transactions
                     if random.random() < 0.2: 
                         desc = random.choice(["UPI Spend - Food", "Prepaid Mobile Recharge"])
                         txn = self.log_transaction("DEBIT", desc, random.uniform(200, 500), date, channel="UPI")
@@ -95,6 +106,7 @@ class FraudAgent(BaseAgent):
                     self.behavior_state = 'busting_out'
 
             if self.behavior_state == 'busting_out':
+                # ✅ UPDATED: Rapid depletion phase with varied channels
                 for _ in range(random.randint(3, 6)):
                     amount = self.balance * random.uniform(0.1, 0.25)
                     desc = random.choice(["E-commerce Purchase", "ATM Withdrawal"])
@@ -104,7 +116,9 @@ class FraudAgent(BaseAgent):
                 self.is_active = False
 
         elif self.fraud_type == 'mule':
+            # ✅ UPDATED: Enhanced mule behavior with realistic cash-out patterns
             if self.balance > self.cash_out_threshold:
+                # Mules typically cash out through ATMs to avoid digital traces
                 cash_out_amount = self.balance * random.uniform(0.9, 1.0)
                 txn = self.log_transaction("DEBIT", "ATM Withdrawal", cash_out_amount, date, channel="ATM")
                 if txn:

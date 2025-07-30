@@ -1,16 +1,15 @@
-# agents/tech_professional.py
-
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+from config_pkg import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
 import numpy as np
-
+from config_pkg.p2p_structure import RealisticP2PStructure  # ✅ NEW: Import for realistic P2P handling
 
 class TechProfessional(BaseAgent):
     """
     A multi-dimensional profile for a Tech Professional.
     Behavior is modified by economic_class and financial_personality.
+    Updated with realistic P2P transaction handling.
     """
     def __init__(self, economic_class='Upper_Middle', financial_personality='Rational_Investor'):
         
@@ -78,16 +77,16 @@ class TechProfessional(BaseAgent):
         self.has_received_bonus_this_year = False
 
         # ✅ Enhanced P2P attributes - Tech professionals have diverse networks
-        self.contacts = []  # To be populated by the simulation engine
+        self.contacts = []  # To be populated by simulation engine
         self.professional_network = []  # Tech colleagues, freelancers, etc.
         self.family_dependents = []  # Family members they support
         
-        self.p2p_transfer_chance = 0.18 * personality_config.get('spend_chance_mod', 1.0)  # Higher frequency
-        self.professional_transfer_chance = 0.12  # For professional payments
-        self.family_support_chance = 0.10  # For family support transfers
+        self.p2p_transfer_chance = 0.18 * personality_config.get('spend_chance_mod', 1.0)
+        self.professional_transfer_chance = 0.12
+        self.family_support_chance = 0.10
         
         # Special transfer occasions
-        self.bonus_sharing_chance = 0.25  # Higher transfers after bonus
+        self.bonus_sharing_chance = 0.25
         self.has_shared_bonus_this_year = False
 
         self.balance = random.uniform(self.salary_amount * 0.5, self.salary_amount)
@@ -153,8 +152,11 @@ class TechProfessional(BaseAgent):
                 if txn: events.append(txn)
 
     def _handle_social_p2p_transfers(self, date, events, context):
-        """✅ Enhanced: Handles social and personal P2P transfers."""
-        if self.contacts and random.random() < self.p2p_transfer_chance:
+        """✅ UPDATED: Handles social and personal P2P transfers with realistic channels."""
+        if (self.contacts and 
+            random.random() < self.p2p_transfer_chance and
+            self.balance > 2000):
+            
             recipient = random.choice(self.contacts)
             
             # Tech professionals typically send moderate to high amounts
@@ -170,29 +172,25 @@ class TechProfessional(BaseAgent):
             elif self.financial_personality == 'Saver':
                 base_amount *= random.uniform(0.7, 1.0)
             
-            transfer_desc = random.choice([
-                'Group Outing Split',
-                'Friend Support',
-                'Social Event',
-                'Shared Expense',
-                'Weekend Plans',
-                'Birthday Gift',
-                'Party Contribution'
-            ])
+            # ✅ NEW: Select realistic channel based on amount
+            if base_amount > 50000:
+                channel = random.choice(['IMPS', 'NEFT'])
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()
             
             context.get('p2p_transfers', []).append({
                 'sender': self, 
                 'recipient': recipient, 
                 'amount': round(base_amount, 2), 
-                'desc': transfer_desc,
-                'channel': 'UPI'
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
             })
 
     def _handle_professional_transfers(self, date, events, context):
-        """✅ NEW: Handles professional and freelance-related transfers."""
+        """✅ UPDATED: Handles professional and freelance-related transfers with realistic channels."""
         if (self.professional_network and 
             random.random() < self.professional_transfer_chance and
-            self.balance > 5000):  # Only if sufficient balance
+            self.balance > 5000):
             
             recipient = random.choice(self.professional_network)
             
@@ -203,29 +201,27 @@ class TechProfessional(BaseAgent):
             if self.economic_class in ['High', 'Upper_Middle']:
                 amount *= random.uniform(1.5, 2.5)
             
-            transfer_desc = random.choice([
-                'Freelance Payment',
-                'Consulting Fee',
-                'Project Collaboration',
-                'Code Review Payment',
-                'Technical Consultation',
-                'Startup Investment',
-                'Professional Service'
-            ])
+            # ✅ NEW: Select realistic channel based on amount
+            if amount > 100000:
+                channel = random.choice(['NEFT', 'RTGS'])  # Very high amounts use secure channels
+            elif amount > 50000:
+                channel = random.choice(['IMPS', 'NEFT'])
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()
             
             context.get('p2p_transfers', []).append({
                 'sender': self, 
                 'recipient': recipient, 
                 'amount': round(amount, 2), 
-                'desc': transfer_desc,
-                'channel': 'UPI'
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
             })
 
     def _handle_family_support(self, date, events, context):
-        """✅ NEW: Handles family support transfers."""
+        """✅ UPDATED: Handles family support transfers with realistic channels."""
         if (self.family_dependents and 
             random.random() < self.family_support_chance and
-            self.balance > 10000):  # Ensure sufficient balance
+            self.balance > 10000):
             
             recipient = random.choice(self.family_dependents)
             
@@ -236,25 +232,22 @@ class TechProfessional(BaseAgent):
             if self.economic_class in ['High', 'Upper_Middle']:
                 support_amount *= random.uniform(1.3, 2.0)
             
-            transfer_desc = random.choice([
-                'Monthly Family Support',
-                'Parents Support',
-                'Education Fee',
-                'Medical Expense',
-                'Family Emergency',
-                'Festival Support'
-            ])
+            # ✅ NEW: Select realistic channel based on amount
+            if support_amount > 50000:
+                channel = random.choice(['IMPS', 'NEFT'])
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()
             
             context.get('p2p_transfers', []).append({
                 'sender': self, 
                 'recipient': recipient, 
                 'amount': round(support_amount, 2), 
-                'desc': transfer_desc,
-                'channel': 'UPI'
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
             })
 
     def _handle_bonus_sharing(self, date, events, context):
-        """✅ NEW: Handles increased transfers after receiving bonus."""
+        """✅ UPDATED: Handles increased transfers after receiving bonus with realistic channels."""
         if (self.has_received_bonus_this_year and 
             not self.has_shared_bonus_this_year and
             date.month == self.annual_bonus_month and
@@ -273,25 +266,33 @@ class TechProfessional(BaseAgent):
                     # Bonus sharing is typically generous
                     bonus_share = self.salary_amount * random.uniform(0.3, 0.8)
                     
+                    # ✅ NEW: Select appropriate channel for large bonus shares
+                    if bonus_share > 100000:
+                        channel = random.choice(['NEFT', 'RTGS'])
+                    elif bonus_share > 50000:
+                        channel = random.choice(['IMPS', 'NEFT'])
+                    else:
+                        channel = RealisticP2PStructure.select_realistic_channel()
+                    
                     context.get('p2p_transfers', []).append({
                         'sender': self, 
                         'recipient': recipient, 
                         'amount': round(bonus_share, 2), 
-                        'desc': 'Bonus Sharing',
-                        'channel': 'UPI'
+                        'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                        'channel': channel  # ✅ Realistic channel
                     })
                 
                 self.has_shared_bonus_this_year = True
 
     def act(self, date: datetime, **context):
-        """✅ Updated: Now includes comprehensive P2P transfer handling."""
+        """✅ Updated: Now includes comprehensive P2P transfer handling with realistic channels."""
         events = []
         self._handle_income(date, events)
         self._handle_fixed_debits(date, events)
         self._handle_dynamic_spending(date, events)
-        self._handle_social_p2p_transfers(date, events, context)     # ✅ Social transfers
-        self._handle_professional_transfers(date, events, context)   # ✅ Professional payments
-        self._handle_family_support(date, events, context)          # ✅ Family support
-        self._handle_bonus_sharing(date, events, context)           # ✅ Bonus sharing
+        self._handle_social_p2p_transfers(date, events, context)     # ✅ Updated with realistic channels
+        self._handle_professional_transfers(date, events, context)   # ✅ Updated with realistic channels
+        self._handle_family_support(date, events, context)          # ✅ Updated with realistic channels
+        self._handle_bonus_sharing(date, events, context)           # ✅ Updated with realistic channels
         self._handle_daily_living_expenses(date, events)
         return events

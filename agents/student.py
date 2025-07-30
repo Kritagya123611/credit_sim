@@ -1,11 +1,16 @@
 import random
 from datetime import datetime, timedelta
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+from config_pkg import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
 import numpy as np
-
+from config_pkg.p2p_structure import RealisticP2PStructure  # ✅ NEW: Import for realistic P2P handling
 
 class Student(BaseAgent):
+    """
+    A multi-dimensional profile for a Student.
+    Behavior is modified by economic_class and financial_personality.
+    Updated with realistic P2P transaction handling.
+    """
     def __init__(self, economic_class='Lower_Middle', financial_personality='Over_Spender'):
         class_config = ECONOMIC_CLASSES[economic_class]
         personality_config = FINANCIAL_PERSONALITIES[financial_personality]
@@ -62,13 +67,21 @@ class Student(BaseAgent):
         self.recharge_chance = 0.08
         self.bnpl_chance = 0.15 if financial_personality == 'Over_Spender' else 0.05
         
-        # ✅ Updated P2P logic - separated from spending
-        self.p2p_transfer_chance = 0.25 * personality_config['spend_chance_mod']  # Higher chance for students
+        # ✅ Enhanced P2P attributes - Students have active social networks
+        self.contacts = []  # To be populated by simulation engine
+        self.study_group = []  # Study group members for academic expenses
+        self.hostel_friends = []  # Hostel/roommate network for shared expenses
+        
+        self.p2p_transfer_chance = 0.25 * personality_config['spend_chance_mod']
+        self.study_group_transfer_chance = 0.15  # Academic-related transfers
+        self.hostel_sharing_chance = 0.18  # Shared hostel expenses
+        self.emergency_help_chance = 0.08  # Emergency peer support
+        
+        # Special events when students are more active in transfers
+        self.exam_months = [4, 10, 11]  # Exam seasons
+        self.festival_months = [3, 10, 11]  # Festival seasons
 
         self.bnpl_repayments = {}
-        # ✅ To be populated by simulation engine
-        self.contacts = []
-
         self.balance = random.uniform(100, 500)
 
     def _handle_income(self, date, events):
@@ -110,33 +123,156 @@ class Student(BaseAgent):
                 txn = self.log_transaction("DEBIT", f"UPI Spend - {spend_category}", spend_amount, date, channel="UPI")
                 if txn: events.append(txn)
 
-    def _handle_p2p_transfers(self, date, events, context):
-        """✅ NEW: Dedicated P2P transfer method for student group expenses."""
-        if self.contacts and random.random() < self.p2p_transfer_chance:
+    def _handle_peer_group_transfers(self, date, events, context):
+        """✅ UPDATED: Handles general peer group transfers with realistic channels."""
+        if (self.contacts and 
+            random.random() < self.p2p_transfer_chance and
+            self.balance > 200):
+            
             recipient = random.choice(self.contacts)
             # Students typically send smaller amounts
             amount = random.uniform(100, 800)
             
+            # Adjust based on economic class
+            if self.economic_class in ['Upper_Middle', 'High']:
+                amount *= random.uniform(1.2, 1.8)
+            elif self.economic_class in ['Lower']:
+                amount *= random.uniform(0.6, 0.9)
+            
+            # ✅ NEW: Select realistic channel
+            channel = RealisticP2PStructure.select_realistic_channel()
+            
             context.get('p2p_transfers', []).append({
                 'sender': self, 
                 'recipient': recipient, 
-                'amount': amount, 
-                'desc': random.choice([
-                    'Group Study Materials', 
-                    'Shared Food Order', 
-                    'Project Expense', 
-                    'Friend Loan',
-                    'Event Contribution',
-                    'Textbook Sharing'
-                ]),
-                'channel': 'UPI'
+                'amount': round(amount, 2), 
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
+            })
+
+    def _handle_study_group_transfers(self, date, events, context):
+        """✅ NEW: Handles academic-related transfers to study group."""
+        if (self.study_group and 
+            random.random() < self.study_group_transfer_chance and
+            self.balance > 150):
+            
+            study_mate = random.choice(self.study_group)
+            
+            # Academic expenses are typically small but frequent
+            academic_amount = random.uniform(50, 400)
+            
+            # Higher amounts during exam months
+            if date.month in self.exam_months:
+                academic_amount *= random.uniform(1.3, 2.0)
+            
+            # ✅ NEW: Select realistic channel
+            channel = RealisticP2PStructure.select_realistic_channel()
+            
+            context.get('p2p_transfers', []).append({
+                'sender': self, 
+                'recipient': study_mate, 
+                'amount': round(academic_amount, 2), 
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
+            })
+
+    def _handle_hostel_sharing_transfers(self, date, events, context):
+        """✅ NEW: Handles shared hostel/accommodation expenses."""
+        if (self.hostel_friends and 
+            random.random() < self.hostel_sharing_chance and
+            self.balance > 200):
+            
+            hostel_mate = random.choice(self.hostel_friends)
+            
+            # Shared expenses (food, utilities, cleaning, etc.)
+            shared_amount = random.uniform(150, 800)
+            
+            # Adjust based on economic class
+            if self.economic_class in ['Upper_Middle', 'High']:
+                shared_amount *= random.uniform(1.2, 1.6)
+            
+            # ✅ NEW: Select realistic channel
+            channel = RealisticP2PStructure.select_realistic_channel()
+            
+            context.get('p2p_transfers', []).append({
+                'sender': self, 
+                'recipient': hostel_mate, 
+                'amount': round(shared_amount, 2), 
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
+            })
+
+    def _handle_emergency_peer_support(self, date, events, context):
+        """✅ NEW: Handles emergency support within student network."""
+        if (self.contacts and 
+            random.random() < self.emergency_help_chance and
+            self.balance > 500):  # Need decent balance for emergency help
+            
+            friend = random.choice(self.contacts)
+            
+            # Emergency amounts for students
+            emergency_amount = random.uniform(300, 1000)
+            
+            # Adjust based on economic class and personality
+            if self.economic_class in ['Upper_Middle', 'High']:
+                emergency_amount *= random.uniform(1.3, 2.0)
+            
+            if self.financial_personality == 'Over_Spender':
+                emergency_amount *= random.uniform(1.2, 1.5)  # More generous
+            
+            # Can't give more than 40% of balance in emergency
+            max_emergency = self.balance * 0.4
+            final_amount = min(emergency_amount, max_emergency)
+            
+            if final_amount >= 100:  # Minimum for meaningful emergency help
+                # ✅ NEW: Select realistic channel
+                channel = RealisticP2PStructure.select_realistic_channel()
+                
+                context.get('p2p_transfers', []).append({
+                    'sender': self, 
+                    'recipient': friend, 
+                    'amount': round(final_amount, 2), 
+                    'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                    'channel': channel  # ✅ Realistic channel
+                })
+
+    def _handle_festival_transfers(self, date, events, context):
+        """✅ NEW: Handles festival-related transfers."""
+        if (date.month in self.festival_months and 
+            date.day <= 5 and
+            self.contacts and 
+            random.random() < (self.p2p_transfer_chance * 2) and
+            self.balance > 300):
+            
+            friend = random.choice(self.contacts)
+            
+            # Festival transfers are typically smaller gifts
+            festival_amount = random.uniform(200, 800)
+            
+            # Adjust based on economic class
+            if self.economic_class in ['Upper_Middle', 'High']:
+                festival_amount *= random.uniform(1.2, 1.8)
+            
+            # ✅ NEW: Select realistic channel
+            channel = RealisticP2PStructure.select_realistic_channel()
+            
+            context.get('p2p_transfers', []).append({
+                'sender': self, 
+                'recipient': friend, 
+                'amount': round(festival_amount, 2), 
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
             })
 
     def act(self, date: datetime, **context):
-        """✅ Updated: Now includes dedicated P2P transfer handling."""
+        """✅ Updated: Now includes comprehensive P2P transfer handling with realistic channels."""
         events = []
         self._handle_income(date, events)
         self._handle_spending(date, events)
-        self._handle_p2p_transfers(date, events, context)  # ✅ Added this line
+        self._handle_peer_group_transfers(date, events, context)      # ✅ Updated with realistic channels
+        self._handle_study_group_transfers(date, events, context)     # ✅ NEW: Academic transfers
+        self._handle_hostel_sharing_transfers(date, events, context)  # ✅ NEW: Hostel sharing
+        self._handle_emergency_peer_support(date, events, context)    # ✅ NEW: Emergency support
+        self._handle_festival_transfers(date, events, context)        # ✅ NEW: Festival transfers
         self._handle_daily_living_expenses(date, events)
         return events

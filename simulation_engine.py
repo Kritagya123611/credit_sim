@@ -7,7 +7,8 @@ from datetime import date, timedelta, datetime
 from faker import Faker
 
 # Step 1: Import configurations and all agent classes
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+from config_pkg import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+from config_pkg.p2p_structure import RealisticP2PStructure  # ✅ Import for realistic P2P handling
 from agents import (
     SalariedProfessional, GigWorker, GovernmentEmployee, Student, DailyWageLaborer,
     SmallBusinessOwner, Doctor, TechProfessional, PoliceOfficer, SeniorCitizen,
@@ -22,7 +23,7 @@ TOTAL_POPULATION = 1000
 SIMULATION_START_DATE = date(2024, 1, 1)
 SIMULATION_END_DATE = date(2024, 6, 30)
 
-# Step 3: Define Population & Behavior Distributions
+# Step 3: Define Population & Behavior Distributions  
 POPULATION_MIX = {
     SalariedProfessional: 0.12, TechProfessional: 0.04, SmallBusinessOwner: 0.18,
     GovernmentEmployee: 0.06, PoliceOfficer: 0.03, Doctor: 0.01, Lawyer: 0.01,
@@ -74,9 +75,26 @@ for _ in range(num_legitimate):
 # --- Create Fraud Population ---
 fraud_rings = {}
 mule_agents = []
+
+# ✅ NEW: Weighted fraud agent mimicking distribution
+mimic_choices = [
+    (GigWorker, 0.20),          # High vulnerability - gig economy workers
+    (Student, 0.18),            # High vulnerability - limited income, tech-savvy
+    (DailyWageLaborer, 0.15),   # High vulnerability - economic desperation
+    (DeliveryAgent, 0.12),      # High vulnerability - access to networks
+    (MigrantWorker, 0.10),      # High vulnerability - limited banking knowledge
+    (SalariedProfessional, 0.08), # Medium vulnerability - stable but targeted
+    (Homemaker, 0.07),          # Medium vulnerability - limited financial literacy
+    (ContentCreator, 0.05),     # Medium vulnerability - irregular income
+    (SmallBusinessOwner, 0.05)  # Lower vulnerability - business experience
+]
+
+agents, weights = zip(*mimic_choices)
+
 for _ in range(num_fraud):
     fraud_type = np.random.choice(list(FRAUD_MIX.keys()), p=list(FRAUD_MIX.values()))
-    mimic_class = random.choice([GigWorker, Student, DailyWageLaborer])
+    mimic_class = random.choices(agents, weights=weights)[0]  # ✅ Weighted selection
+    
     if fraud_type == 'ring':
         num_rings = max(1, int(num_fraud * FRAUD_MIX['ring'] / 4))
         ring_id = f"ring_{random.randint(1, num_rings)}"
@@ -110,7 +128,7 @@ for agent in agent_population:
         if len(possible_collaborators) > 3:
             agent.collaborators = random.sample(possible_collaborators, k=random.randint(1, 3))
         
-        # ✅ NEW: Additional networks for ContentCreator
+        # ✅ Additional networks for ContentCreator
         possible_creators = [p for p in legit_population if p.agent_id != agent.agent_id and isinstance(p, ContentCreator)]
         if len(possible_creators) > 1:
             agent.creator_network = random.sample(possible_creators, k=random.randint(1, min(3, len(possible_creators))))
@@ -253,7 +271,7 @@ for i in range(delta.days + 1):
     current_datetime = datetime.combine(current_date, datetime.min.time())
     p2p_transfers_today = []
     
-    # --- Inter-agent Fraud Ring Transfers ---
+    # ✅ UPDATED: Inter-agent Fraud Ring Transfers with standardized descriptions
     if random.random() < 0.25:
         for ring_data in fraud_rings.values():
             if ring_data['members'] and ring_data['mules']:
@@ -261,18 +279,33 @@ for i in range(delta.days + 1):
                 recipient = random.choice(ring_data['mules'])
                 amount = sender.balance * random.uniform(0.05, 0.15)
                 if amount > 0:
-                    p2p_transfers_today.append({'sender': sender, 'recipient': recipient, 'amount': amount, 'desc': 'P2P to Mule', 'channel': 'P2P'})
+                    p2p_transfers_today.append({
+                        'sender': sender, 
+                        'recipient': recipient, 
+                        'amount': amount, 
+                        'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                        'channel': 'UPI'  # ✅ Realistic channel
+                    })
 
-    # --- Inter-agent UPI Transfers ---
+    # ✅ UPDATED: Inter-agent UPI Transfers with realistic channel selection
     if random.random() < 0.15 and len(legit_population) > 1:
         for _ in range(random.randint(1, 5)):
             sender, recipient = random.sample(legit_population, 2)
             amount = random.uniform(100, 2500)
-            description = random.choice(["Food expenses", "Shared fare", "Payment for goods", "Friendly loan"])
+            
+            # ✅ NEW: Select realistic channel based on amount
+            if amount > 50000:
+                channel = random.choice(['IMPS', 'NEFT'])  # Higher amounts use traditional channels
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()  # Market-based selection
+            
             if sender.balance > amount:
                 p2p_transfers_today.append({
-                    'sender': sender, 'recipient': recipient, 'amount': amount, 
-                    'desc': description, 'channel': 'UPI'
+                    'sender': sender, 
+                    'recipient': recipient, 
+                    'amount': amount, 
+                    'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                    'channel': channel  # ✅ Realistic channel
                 })
 
     # --- AGENT ACTION LOOP ---
@@ -284,42 +317,100 @@ for i in range(delta.days + 1):
         if daily_events:
             all_transactions.extend(daily_events)
 
-    # --- Process all queued transfers for the day ---
+    # ✅ UPDATED: Process all queued transfers with realistic bank-visible descriptions
     for p2p in p2p_transfers_today:
         sender = p2p.get('sender')
         recipient = p2p.get('recipient')
         amount = p2p.get('amount')
-        desc = p2p.get('desc', 'Transfer')
-        channel = p2p.get('channel', 'P2P')
+        channel = p2p.get('channel', 'UPI')
         
         if sender and recipient and amount > 0:
+            # ✅ UPDATED: Let BaseAgent handle realistic formatting automatically
             debit_txn = sender.log_transaction(
                 txn_type="DEBIT", 
-                description=f"{desc} to {recipient.agent_id[:6]}", 
+                description="UPI P2P Transfer",  # Generic description (gets reformatted automatically)
                 amount=amount, 
                 date=current_datetime, 
                 channel=channel, 
-                recipient_id=recipient.agent_id
+                recipient_id=recipient.agent_id  # This triggers realistic formatting
             )
             
             if debit_txn:
                 all_transactions.append(debit_txn)
                 credit_txn = recipient.log_transaction(
                     txn_type="CREDIT", 
-                    description=f"{desc} from {sender.agent_id[:6]}", 
+                    description="UPI P2P Transfer",  # Generic description (gets reformatted automatically)
                     amount=amount, 
                     date=current_datetime, 
                     channel=channel,
-                    recipient_id=sender.agent_id
+                    recipient_id=sender.agent_id  # This triggers realistic formatting
                 )
-
+                
                 if credit_txn: 
                     all_transactions.append(credit_txn)
 
 print("Simulation complete.")
 
+# ✅ NEW: Enhanced transaction analysis
+print("\n=== TRANSACTION ANALYSIS ===")
+p2p_transactions = [txn for txn in all_transactions if any(indicator in txn['description'] for indicator in ['UPI P2P', 'IMPS TXN', 'P2P TXN', 'NEFT CR', 'RTGS CR', 'WALLET TXN'])]
+total_p2p = len(p2p_transactions)
+total_transactions = len(all_transactions)
+
+print(f"Total transactions: {total_transactions:,}")
+print(f"P2P transactions: {total_p2p:,} ({total_p2p/total_transactions*100:.1f}%)")
+
+# ✅ NEW: Channel breakdown
+channel_counts = {}
+for txn in p2p_transactions:
+    channel = txn['channel']
+    channel_counts[channel] = channel_counts.get(channel, 0) + 1
+
+print("\nP2P Channel Distribution:")
+for channel, count in sorted(channel_counts.items()):
+    percentage = count / total_p2p * 100 if total_p2p > 0 else 0
+    print(f"  {channel}: {count:,} ({percentage:.1f}%)")
+
+# ✅ NEW: Fraud pattern analysis
+fraud_agents = [agent for agent in agent_population if hasattr(agent, 'fraud_type')]
+fraud_transactions = [txn for txn in all_transactions if any(agent.agent_id == txn['agent_id'] for agent in fraud_agents)]
+print(f"\nFraud-related transactions: {len(fraud_transactions):,}")
+
+# ✅ NEW: Analyze fraud rings
+print(f"Fraud Rings Created: {len(fraud_rings)}")
+for ring_id, ring_data in fraud_rings.items():
+    members = len(ring_data['members'])
+    mules = len(ring_data['mules'])
+    print(f"  {ring_id}: {members} members, {mules} mules")
+
+# ✅ NEW: Fraud mimicking analysis
+print(f"\nFraud Agent Mimicking Distribution:")
+mimic_counts = {}
+for agent in fraud_agents:
+    archetype = agent.archetype_name.split(' (')[0] if '(' in agent.archetype_name else agent.archetype_name
+    # Get the actual mimicked class name
+    mimicked_class = 'Unknown'
+    if hasattr(agent, 'employment_status'):
+        # Try to infer from employment status patterns
+        employment_mapping = {
+            'Gig_Work_Contractor': 'GigWorker/DeliveryAgent',
+            'Student': 'Student', 
+            'Manual_Labor': 'DailyWageLaborer',
+            'Self-Employed': 'SmallBusinessOwner/ContentCreator',
+            'Full_Time_Employee': 'SalariedProfessional',
+            'Unemployed_Homemaker': 'Homemaker',
+            'Migrant_Daily_Wage': 'MigrantWorker'
+        }
+        mimicked_class = employment_mapping.get(agent.employment_status, 'Unknown')
+    
+    mimic_counts[mimicked_class] = mimic_counts.get(mimicked_class, 0) + 1
+
+for mimic_type, count in sorted(mimic_counts.items()):
+    percentage = count / len(fraud_agents) * 100 if fraud_agents else 0
+    print(f"  {mimic_type}: {count} ({percentage:.1f}%)")
+
 # Step 6: Harvest and Export Data
-print("Harvesting data for CSV export...")
+print("\nHarvesting data for CSV export...")
 agent_profile_data = [agent.to_dict() for agent in agent_population]
 agent_df = pd.DataFrame(agent_profile_data)
 transactions_df = pd.DataFrame(all_transactions)

@@ -1,13 +1,15 @@
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+from config_pkg import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
 import numpy as np
+from config_pkg.p2p_structure import RealisticP2PStructure  # ✅ NEW: Import for realistic P2P handling
 
 class GovernmentEmployee(BaseAgent):
     """
     A multi-dimensional profile for a Government Employee.
     Behavior is modified by economic_class and financial_personality.
+    Updated with realistic P2P transaction handling.
     """
     def __init__(self, economic_class='Middle', financial_personality='Saver'):
         
@@ -70,23 +72,41 @@ class GovernmentEmployee(BaseAgent):
 
         self.ecommerce_spend_chance = 0.05 * personality_config['spend_chance_mod']
         
-        self.family_member_recipient = None
+        # ✅ Enhanced P2P attributes - Government employees have family networks
+        self.family_member_recipient = None  # To be populated by simulation engine
+        self.professional_network = []  # Colleagues and professional contacts
+        self.extended_family = []  # Extended family for support
+        
+        self.family_remittance_chance = 0.25  # Regular family support
+        self.professional_transfer_chance = 0.08  # Professional transfers
+        self.extended_family_support_chance = 0.12  # Extended family support
 
         self.balance = random.uniform(self.salary_amount * 0.3, self.salary_amount * 0.8)
 
     def _handle_recurring_events(self, date, events, context):
+        """Handles salary and regular payments including family remittances."""
         if date.day == self.salary_day:
             txn = self.log_transaction("CREDIT", "Govt Salary Deposit", self.salary_amount, date, channel="Bank Transfer")
             if txn: 
                 events.append(txn)
-                if self.family_member_recipient:
+                # ✅ UPDATED: Monthly family remittance with realistic channel selection
+                if (self.family_member_recipient and 
+                    random.random() < self.family_remittance_chance):
+                    
                     remittance_amount = self.salary_amount * self.remittance_percentage
+                    
+                    # ✅ NEW: Select realistic channel based on amount
+                    if remittance_amount > 50000:
+                        channel = random.choice(['IMPS', 'NEFT'])
+                    else:
+                        channel = RealisticP2PStructure.select_realistic_channel()
+                    
                     context.get('p2p_transfers', []).append({
                         'sender': self, 
                         'recipient': self.family_member_recipient, 
                         'amount': remittance_amount, 
-                        'desc': 'Family Support',
-                        'channel': 'UPI'  # Specifying channel for clarity
+                        'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                        'channel': channel  # ✅ Realistic channel
                     })
             
         if self.has_loan_emi and date.day == 5:
@@ -109,15 +129,74 @@ class GovernmentEmployee(BaseAgent):
             txn = self.log_transaction("DEBIT", "Utility Bill Payment", bill, date, channel="Netbanking")
             if txn: events.append(txn)
 
+    def _handle_professional_network_transfers(self, date, events, context):
+        """✅ NEW: Handles transfers within professional network."""
+        if (self.professional_network and 
+            random.random() < self.professional_transfer_chance and
+            self.balance > 5000):
+            
+            colleague = random.choice(self.professional_network)
+            
+            # Professional transfers (shared expenses, office collections, etc.)
+            transfer_amount = random.uniform(500, 3000)
+            
+            # Adjust based on economic class
+            if self.economic_class in ['Upper_Middle', 'High']:
+                transfer_amount *= random.uniform(1.2, 2.0)
+            
+            # ✅ NEW: Select realistic channel
+            channel = RealisticP2PStructure.select_realistic_channel()
+            
+            context.get('p2p_transfers', []).append({
+                'sender': self, 
+                'recipient': colleague, 
+                'amount': round(transfer_amount, 2), 
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
+            })
+
+    def _handle_extended_family_support(self, date, events, context):
+        """✅ NEW: Handles support to extended family members."""
+        if (self.extended_family and 
+            random.random() < self.extended_family_support_chance and
+            self.balance > 8000):
+            
+            family_member = random.choice(self.extended_family)
+            
+            # Extended family support amounts
+            support_amount = self.salary_amount * random.uniform(0.05, 0.15)
+            
+            # Adjust based on financial personality
+            if self.financial_personality == 'Saver':
+                support_amount *= random.uniform(1.1, 1.4)  # Savers are more supportive to family
+            
+            # ✅ NEW: Select realistic channel
+            if support_amount > 50000:
+                channel = random.choice(['IMPS', 'NEFT'])
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()
+            
+            context.get('p2p_transfers', []).append({
+                'sender': self, 
+                'recipient': family_member, 
+                'amount': round(support_amount, 2), 
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
+            })
+
     def _handle_daily_spending(self, date, events):
+        """Simulates occasional e-commerce spending."""
         if random.random() < self.ecommerce_spend_chance:
             ecommerce_amt = random.uniform(500, 2500)
             txn = self.log_transaction("DEBIT", "E-commerce Purchase (Essentials)", ecommerce_amt, date, channel="Card")
             if txn: events.append(txn)
 
     def act(self, date: datetime, **context):
+        """✅ Updated: Now includes comprehensive P2P transfer handling with realistic channels."""
         events = []
         self._handle_recurring_events(date, events, context)
+        self._handle_professional_network_transfers(date, events, context)  # ✅ NEW: Professional network transfers
+        self._handle_extended_family_support(date, events, context)         # ✅ NEW: Extended family support
         self._handle_daily_spending(date, events)
         self._handle_daily_living_expenses(date, events)
         return events

@@ -1,16 +1,15 @@
-# agents/daily_wage_laborer.py
-
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+from config_pkg import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
 import numpy as np
-
+from config_pkg.p2p_structure import RealisticP2PStructure  # ✅ NEW: Import for realistic P2P handling
 
 class DailyWageLaborer(BaseAgent):
     """
     A multi-dimensional profile for a Daily Wage Laborer.
     Behavior is modified by economic_class and financial_personality.
+    Updated with realistic P2P transaction handling.
     """
     def __init__(self, economic_class='Lower', financial_personality='Saver'):
         
@@ -70,14 +69,13 @@ class DailyWageLaborer(BaseAgent):
         self.remittance_percentage = random.uniform(0.6, 0.8) * (1.1 if financial_personality == 'Saver' else 1)
         self.recharge_chance = 0.05
         
-        # ✅ Updated P2P attributes - Daily wage laborers have community networks
+        # ✅ Enhanced P2P attributes - Daily wage laborers have tight worker networks
         self.worker_network = []  # To be populated by simulation engine
         self.family_recipient = None  # Single family member for regular remittances
-        self.p2p_transfer_chance = 0.15 * personality_config.get('spend_chance_mod', 1.0)
         
-        # Emergency and community support patterns
-        self.emergency_help_chance = 0.03  # 3% chance of emergency help
-        self.community_support_chance = 0.08  # 8% chance of community support
+        self.p2p_transfer_chance = 0.15 * personality_config.get('spend_chance_mod', 1.0)
+        self.emergency_help_chance = 0.03
+        self.community_support_chance = 0.08
         
         # Track last remittance to manage frequency
         self.last_remittance_day = None
@@ -85,7 +83,7 @@ class DailyWageLaborer(BaseAgent):
         self.balance = random.uniform(50, 200)
 
     def _handle_daily_income(self, date, events):
-        """✅ Separated income handling from P2P transfers."""
+        """✅ UPDATED: Separated income handling from P2P transfers."""
         if random.random() < self.daily_work_chance:
             wage_txn = self.log_transaction("CREDIT", "Cash Wage Deposit", self.daily_wage_amount, date, channel="Cash Deposit")
             if wage_txn:
@@ -102,7 +100,7 @@ class DailyWageLaborer(BaseAgent):
                     events.append(cash_txn)
 
     def _handle_family_remittances(self, date, events, context):
-        """✅ NEW: Handles regular family remittances after work."""
+        """✅ UPDATED: Handles regular family remittances with realistic channels."""
         # Send money home after getting paid (but not every day to avoid over-sending)
         current_day_key = date.strftime("%Y-%m-%d")
         
@@ -114,18 +112,24 @@ class DailyWageLaborer(BaseAgent):
             remittance_amount = self.daily_wage_amount * self.remittance_percentage
             
             if remittance_amount >= 20:  # Minimum threshold
+                # ✅ NEW: Select realistic channel
+                channel = RealisticP2PStructure.select_realistic_channel()
+                
                 context.get('p2p_transfers', []).append({
                     'sender': self, 
                     'recipient': self.family_recipient, 
                     'amount': round(remittance_amount, 2), 
-                    'desc': 'Family Remittance',
-                    'channel': 'UPI'
+                    'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                    'channel': channel  # ✅ Realistic channel
                 })
                 self.last_remittance_day = current_day_key
 
-    def _handle_p2p_transfers(self, date, events, context):
-        """✅ NEW: Handles transfers within worker community."""
-        if self.worker_network and random.random() < self.p2p_transfer_chance:
+    def _handle_worker_community_transfers(self, date, events, context):
+        """✅ UPDATED: Handles transfers within worker community with realistic channels."""
+        if (self.worker_network and 
+            random.random() < self.p2p_transfer_chance and
+            self.balance > 100):
+            
             recipient = random.choice(self.worker_network)
             
             # Small amounts typical for this economic group
@@ -136,26 +140,19 @@ class DailyWageLaborer(BaseAgent):
             amount = min(base_amount, max_sendable)
             
             if amount >= 20:  # Minimum viable transfer
-                transfer_desc = random.choice([
-                    'Worker Loan', 
-                    'Shared Meal', 
-                    'Emergency Help', 
-                    'Tool Sharing',
-                    'Transport Share',
-                    'Tea/Snacks',
-                    'Mutual Aid'
-                ])
+                # ✅ NEW: Select realistic channel
+                channel = RealisticP2PStructure.select_realistic_channel()
                 
                 context.get('p2p_transfers', []).append({
                     'sender': self, 
                     'recipient': recipient, 
                     'amount': round(amount, 2), 
-                    'desc': transfer_desc,
-                    'channel': 'UPI'
+                    'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                    'channel': channel  # ✅ Realistic channel
                 })
 
     def _handle_community_support(self, date, events, context):
-        """✅ NEW: Handles emergency community support transfers."""
+        """✅ UPDATED: Handles emergency community support transfers with realistic channels."""
         if (self.worker_network and 
             random.random() < self.community_support_chance and 
             self.balance > 100):  # Only if some balance available
@@ -170,22 +167,19 @@ class DailyWageLaborer(BaseAgent):
             final_amount = min(support_amount, max_support)
             
             if final_amount >= 50:  # Minimum for meaningful support
+                # ✅ NEW: Select realistic channel
+                channel = RealisticP2PStructure.select_realistic_channel()
+                
                 context.get('p2p_transfers', []).append({
                     'sender': self, 
                     'recipient': recipient, 
                     'amount': round(final_amount, 2), 
-                    'desc': random.choice([
-                        'Emergency Support', 
-                        'Medical Help', 
-                        'Urgent Need',
-                        'Community Aid',
-                        'Worker Emergency'
-                    ]),
-                    'channel': 'UPI'
+                    'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                    'channel': channel  # ✅ Realistic channel
                 })
 
     def _handle_emergency_help(self, date, events, context):
-        """✅ NEW: Handles urgent emergency help for fellow workers."""
+        """✅ UPDATED: Handles urgent emergency help for fellow workers with realistic channels."""
         if (self.worker_network and 
             random.random() < self.emergency_help_chance and 
             self.balance > 200):  # Need significant balance for emergency help
@@ -200,12 +194,15 @@ class DailyWageLaborer(BaseAgent):
             final_amount = min(emergency_amount, max_emergency)
             
             if final_amount >= 100:  # Minimum for emergency
+                # ✅ NEW: Select realistic channel
+                channel = RealisticP2PStructure.select_realistic_channel()
+                
                 context.get('p2p_transfers', []).append({
                     'sender': self, 
                     'recipient': recipient, 
                     'amount': round(final_amount, 2), 
-                    'desc': 'Worker Emergency Fund',
-                    'channel': 'UPI'
+                    'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                    'channel': channel  # ✅ Realistic channel
                 })
 
     def _handle_recharge(self, date, events):
@@ -216,13 +213,13 @@ class DailyWageLaborer(BaseAgent):
             if txn: events.append(txn)
 
     def act(self, date: datetime, **context):
-        """✅ Updated: Now includes comprehensive P2P transfer handling."""
+        """✅ Updated: Now includes comprehensive P2P transfer handling with realistic channels."""
         events = []
         self._handle_daily_income(date, events)
-        self._handle_family_remittances(date, events, context)    # ✅ Primary family support
-        self._handle_p2p_transfers(date, events, context)         # ✅ Worker community transfers
-        self._handle_community_support(date, events, context)     # ✅ Community mutual aid
-        self._handle_emergency_help(date, events, context)        # ✅ Emergency support
+        self._handle_family_remittances(date, events, context)      # ✅ Updated with realistic channels
+        self._handle_worker_community_transfers(date, events, context)  # ✅ Updated with realistic channels
+        self._handle_community_support(date, events, context)       # ✅ Updated with realistic channels
+        self._handle_emergency_help(date, events, context)          # ✅ Updated with realistic channels
         self._handle_cash_withdrawals(date, events)
         self._handle_recharge(date, events)
         self._handle_daily_living_expenses(date, events)

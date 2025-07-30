@@ -1,13 +1,15 @@
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+from config_pkg import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
 import numpy as np
+from config_pkg.p2p_structure import RealisticP2PStructure  # ✅ NEW: Import for realistic P2P handling
 
 class Doctor(BaseAgent):
     """
     A multi-dimensional profile for a Doctor.
     Behavior is modified by economic_class and financial_personality.
+    Updated with realistic P2P transaction handling.
     """
     def __init__(self, economic_class='Upper_Middle', financial_personality='Rational_Investor'):
         
@@ -71,12 +73,19 @@ class Doctor(BaseAgent):
         self.prof_indemnity_premium = self.avg_monthly_income * 0.5
         self.high_end_spend_chance = 0.10 * personality_config['spend_chance_mod']
         
-        self.service_providers = [] 
-        self.p2p_payment_chance = 0.2 
+        # ✅ Enhanced P2P attributes - Doctors have professional networks
+        self.service_providers = []  # To be populated by simulation engine
+        self.professional_network = []  # Other healthcare professionals
+        self.family_dependents = []  # Family members for support
+        
+        self.p2p_payment_chance = 0.20  # Professional service payments
+        self.professional_transfer_chance = 0.12  # Transfers to medical colleagues
+        self.family_support_chance = 0.15  # Supporting family members
 
         self.balance = random.uniform(self.avg_monthly_income, self.avg_monthly_income * 2)
 
     def _handle_income(self, date, events):
+        """Handles consultation fees and large medical payouts."""
         if date.weekday() < 5 and random.random() < self.consultation_chance:
             daily_consult_income = self.avg_consultation_fee * random.uniform(0.8, 1.2)
             txn = self.log_transaction("CREDIT", "Daily Consultation Fees", daily_consult_income, date, channel="UPI")
@@ -89,6 +98,7 @@ class Doctor(BaseAgent):
             if txn: events.append(txn)
 
     def _handle_professional_and_fixed_expenses(self, date, events):
+        """Handles professional and fixed monthly expenses."""
         if date.day == 5:
             txn = self.log_transaction("DEBIT", "Clinic Rent", self.clinic_rent_amount, date, channel="Netbanking")
             if txn: events.append(txn)
@@ -106,30 +116,108 @@ class Doctor(BaseAgent):
              if txn: events.append(txn)
 
     def _handle_discretionary_spending(self, date, events):
+        """Handles high-end discretionary spending typical for doctors."""
         if random.random() < self.high_end_spend_chance:
             spend_category = random.choice(["Fine Dining", "Luxury Goods", "Travel Booking", "Electronics"])
             spend_amount = random.uniform(5000, 25000)
             txn = self.log_transaction("DEBIT", f"Card Spend - {spend_category}", spend_amount, date, channel="Card")
             if txn: events.append(txn)
 
-    def _handle_p2p_payments(self, date, events, context):
-        if date.day == 25 and self.service_providers and random.random() < self.p2p_payment_chance:
+    def _handle_professional_service_payments(self, date, events, context):
+        """✅ UPDATED: Handles payments to service providers with realistic channels."""
+        if (date.day == 25 and 
+            self.service_providers and 
+            random.random() < self.p2p_payment_chance and
+            self.balance > 10000):
+            
             provider = random.choice(self.service_providers)
             amount = self.avg_monthly_income * random.uniform(0.1, 0.2)
+            
+            # ✅ NEW: Select realistic channel based on amount
+            if amount > 100000:
+                channel = random.choice(['NEFT', 'RTGS'])  # High amounts use secure channels
+            elif amount > 50000:
+                channel = random.choice(['IMPS', 'NEFT'])
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()
             
             context.get('p2p_transfers', []).append({
                 'sender': self, 
                 'recipient': provider, 
-                'amount': amount, 
-                'desc': 'Professional Service Fee',
-                'channel': 'P2P' # Specifying channel for clarity
+                'amount': round(amount, 2), 
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
+            })
+
+    def _handle_professional_network_transfers(self, date, events, context):
+        """✅ NEW: Handles transfers to other medical professionals."""
+        if (self.professional_network and 
+            random.random() < self.professional_transfer_chance and
+            self.balance > 15000):
+            
+            colleague = random.choice(self.professional_network)
+            
+            # Professional transfers (consultation referrals, joint procedures, etc.)
+            base_amount = self.avg_monthly_income * random.uniform(0.05, 0.15)
+            
+            # Adjust based on economic class
+            if self.economic_class == 'High':
+                base_amount *= random.uniform(1.5, 2.0)
+            
+            # ✅ NEW: Select realistic channel
+            if base_amount > 50000:
+                channel = random.choice(['IMPS', 'NEFT'])
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()
+            
+            context.get('p2p_transfers', []).append({
+                'sender': self, 
+                'recipient': colleague, 
+                'amount': round(base_amount, 2), 
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
+            })
+
+    def _handle_family_support_transfers(self, date, events, context):
+        """✅ NEW: Handles family support transfers."""
+        if (self.family_dependents and 
+            date.day == 1 and  # Monthly family support on 1st
+            random.random() < self.family_support_chance and
+            self.balance > 20000):
+            
+            family_member = random.choice(self.family_dependents)
+            
+            # Family support amounts based on income
+            support_amount = self.avg_monthly_income * random.uniform(0.15, 0.30)
+            
+            # Adjust based on financial personality
+            if self.financial_personality == 'Saver':
+                support_amount *= random.uniform(0.8, 1.0)
+            elif self.financial_personality == 'Over_Spender':
+                support_amount *= random.uniform(1.2, 1.5)
+            
+            # ✅ NEW: Select realistic channel
+            if support_amount > 50000:
+                channel = random.choice(['IMPS', 'NEFT'])
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()
+            
+            context.get('p2p_transfers', []).append({
+                'sender': self, 
+                'recipient': family_member, 
+                'amount': round(support_amount, 2), 
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
             })
 
     def act(self, date: datetime, **context):
+        """✅ Updated: Now includes comprehensive P2P transfer handling with realistic channels."""
         events = []
         self._handle_income(date, events)
         self._handle_professional_and_fixed_expenses(date, events)
         self._handle_discretionary_spending(date, events)
-        self._handle_p2p_payments(date, events, context)
+        self._handle_professional_service_payments(date, events, context)  # ✅ Updated with realistic channels
+        self._handle_professional_network_transfers(date, events, context)  # ✅ NEW: Professional network transfers
+        self._handle_family_support_transfers(date, events, context)        # ✅ NEW: Family support transfers
         self._handle_daily_living_expenses(date, events)
         return events

@@ -1,16 +1,15 @@
-# agents/senior.py
-
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+from config_pkg import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
 import numpy as np
-
+from config_pkg.p2p_structure import RealisticP2PStructure  # ✅ NEW: Import for realistic P2P handling
 
 class SeniorCitizen(BaseAgent):
     """
     A multi-dimensional profile for a Retired Senior Citizen.
     Behavior is modified by economic_class and financial_personality.
+    Updated with realistic P2P transaction handling.
     """
     def __init__(self, economic_class='Lower_Middle', financial_personality='Saver'):
         
@@ -74,12 +73,18 @@ class SeniorCitizen(BaseAgent):
         self.large_event_month = random.randint(1, 12)
         self.has_done_large_event_this_year = False
         
-        # ✅ Updated P2P Logic - Senior citizens often send money to family
+        # ✅ Enhanced P2P attributes - Senior citizens have family networks
         self.family_members = []  # To be populated by simulation engine
-        self.p2p_transfer_chance = 0.08 * personality_config.get('spend_chance_mod', 1.0)  # Lower frequency for seniors
+        self.grandchildren = []  # Grandchildren for special gifts
+        self.children_network = []  # Adult children for regular support
+        
+        self.p2p_transfer_chance = 0.08 * personality_config.get('spend_chance_mod', 1.0)
+        self.grandchildren_gift_chance = 0.12  # Higher chance for grandchildren gifts
+        self.emergency_family_support_chance = 0.05  # Emergency family support
         
         # Special occasions when seniors are more likely to send money
         self.festival_months = [3, 10, 11]  # Holi, Diwali, etc.
+        self.birthday_months = random.sample(range(1, 13), k=random.randint(2, 4))  # Family birthdays
 
         self.balance = random.uniform(self.monthly_income * 2.0, self.monthly_income * 5.0)
 
@@ -121,32 +126,16 @@ class SeniorCitizen(BaseAgent):
                 if txn: events.append(txn)
                 self.has_done_large_event_this_year = True
 
-    def _handle_p2p_transfers(self, date, events, context):
-        """✅ NEW: Simulates sending money to family members for support and special occasions."""
-        if self.family_members and random.random() < self.p2p_transfer_chance:
+    def _handle_regular_family_transfers(self, date, events, context):
+        """✅ UPDATED: Handles regular family support transfers with realistic channels."""
+        if (self.family_members and 
+            random.random() < self.p2p_transfer_chance and
+            self.balance > 5000):
+            
             recipient = random.choice(self.family_members)
             
             # Senior citizens send moderate to higher amounts to family
             base_amount = random.uniform(1000, 5000)
-            
-            # Increase amount during festival months
-            if date.month in self.festival_months:
-                base_amount *= random.uniform(1.5, 2.5)
-                transfer_desc = random.choice([
-                    'Festival Gift', 
-                    'Religious Ceremony', 
-                    'Special Occasion', 
-                    'Holiday Celebration'
-                ])
-            else:
-                transfer_desc = random.choice([
-                    'Family Support', 
-                    'Medical Help', 
-                    'Emergency Aid',
-                    'Monthly Support',
-                    'Grandchildren Gift',
-                    'Educational Support'
-                ])
             
             # Adjust amount based on economic class
             if self.economic_class in ['High', 'Upper_Middle']:
@@ -154,38 +143,120 @@ class SeniorCitizen(BaseAgent):
             elif self.economic_class in ['Lower', 'Lower_Middle']:
                 base_amount *= random.uniform(0.5, 0.8)
             
+            # ✅ NEW: Select realistic channel based on amount
+            if base_amount > 50000:
+                channel = random.choice(['IMPS', 'NEFT'])  # Seniors might use traditional channels for large amounts
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()
+            
             context.get('p2p_transfers', []).append({
                 'sender': self, 
                 'recipient': recipient, 
                 'amount': round(base_amount, 2), 
-                'desc': transfer_desc,
-                'channel': 'UPI'  # Many seniors now use UPI for family transfers
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
             })
 
-    def _handle_special_occasions(self, date, events, context):
-        """✅ NEW: Handles special occasion transfers like birthdays, festivals."""
+    def _handle_grandchildren_gifts(self, date, events, context):
+        """✅ NEW: Handles special gifts to grandchildren."""
+        if (self.grandchildren and 
+            random.random() < self.grandchildren_gift_chance and
+            self.balance > 3000):
+            
+            grandchild = random.choice(self.grandchildren)
+            
+            # Grandchildren gifts are typically generous but smaller than family support
+            gift_amount = random.uniform(500, 2500)
+            
+            # Higher amounts during birthdays and festivals
+            if date.month in self.birthday_months or date.month in self.festival_months:
+                gift_amount *= random.uniform(1.5, 2.5)
+            
+            # Adjust based on economic class
+            if self.economic_class in ['High', 'Upper_Middle']:
+                gift_amount *= random.uniform(1.3, 2.0)
+            
+            # ✅ NEW: Select realistic channel
+            channel = RealisticP2PStructure.select_realistic_channel()
+            
+            context.get('p2p_transfers', []).append({
+                'sender': self, 
+                'recipient': grandchild, 
+                'amount': round(gift_amount, 2), 
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
+            })
+
+    def _handle_festival_and_special_occasions(self, date, events, context):
+        """✅ UPDATED: Handles festival and special occasion transfers with realistic channels."""
         # Increased P2P activity during festival months
-        if date.month in self.festival_months and date.day <= 5:
-            # Higher chance of sending money during festivals
-            if self.family_members and random.random() < (self.p2p_transfer_chance * 3):
-                recipient = random.choice(self.family_members)
-                festival_amount = self.monthly_income * random.uniform(0.15, 0.30)
-                
-                context.get('p2p_transfers', []).append({
-                    'sender': self, 
-                    'recipient': recipient, 
-                    'amount': round(festival_amount, 2), 
-                    'desc': 'Festival Blessing Money',
-                    'channel': 'UPI'
-                })
+        if (date.month in self.festival_months and 
+            date.day <= 5 and
+            self.family_members and 
+            random.random() < (self.p2p_transfer_chance * 3) and
+            self.balance > 8000):
+            
+            recipient = random.choice(self.family_members)
+            festival_amount = self.monthly_income * random.uniform(0.15, 0.30)
+            
+            # Adjust based on economic class
+            if self.economic_class in ['High', 'Upper_Middle']:
+                festival_amount *= random.uniform(1.4, 2.2)
+            
+            # ✅ NEW: Select realistic channel based on amount
+            if festival_amount > 50000:
+                channel = random.choice(['IMPS', 'NEFT'])
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()
+            
+            context.get('p2p_transfers', []).append({
+                'sender': self, 
+                'recipient': recipient, 
+                'amount': round(festival_amount, 2), 
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
+            })
+
+    def _handle_emergency_family_support(self, date, events, context):
+        """✅ NEW: Handles emergency family support transfers."""
+        if (self.children_network and 
+            random.random() < self.emergency_family_support_chance and
+            self.balance > 15000):  # Need significant balance for emergency support
+            
+            child = random.choice(self.children_network)
+            
+            # Emergency support from seniors can be substantial
+            emergency_amount = self.balance * random.uniform(0.2, 0.4)
+            
+            # Adjust based on economic class
+            if self.economic_class in ['High', 'Upper_Middle']:
+                emergency_amount *= random.uniform(1.2, 1.8)
+            
+            # ✅ NEW: Select appropriate channel for emergency amounts
+            if emergency_amount > 100000:
+                channel = random.choice(['NEFT', 'RTGS'])  # Very large emergency amounts
+            elif emergency_amount > 50000:
+                channel = random.choice(['IMPS', 'NEFT'])
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()
+            
+            context.get('p2p_transfers', []).append({
+                'sender': self, 
+                'recipient': child, 
+                'amount': round(emergency_amount, 2), 
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
+            })
 
     def act(self, date: datetime, **context):
-        """✅ Updated: Now includes P2P transfer handling."""
+        """✅ Updated: Now includes comprehensive P2P transfer handling with realistic channels."""
         events = []
         self._handle_monthly_events(date, events)
         self._handle_weekly_events(date, events)
         self._handle_annual_events(date, events)
-        self._handle_p2p_transfers(date, events, context)  # ✅ Added this line
-        self._handle_special_occasions(date, events, context)  # ✅ Added this line
+        self._handle_regular_family_transfers(date, events, context)      # ✅ Updated with realistic channels
+        self._handle_grandchildren_gifts(date, events, context)           # ✅ NEW: Grandchildren gifts
+        self._handle_festival_and_special_occasions(date, events, context)  # ✅ Updated with realistic channels
+        self._handle_emergency_family_support(date, events, context)      # ✅ NEW: Emergency family support
         self._handle_daily_living_expenses(date, events, daily_spend_chance=0.1)
         return events

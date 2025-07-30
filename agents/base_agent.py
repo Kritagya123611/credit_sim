@@ -5,13 +5,18 @@ import random
 from faker import Faker
 from datetime import datetime
 
+# Import realistic P2P structure configuration
+from config_pkg.p2p_structure import RealisticP2PStructure, get_standardized_p2p_description
+
 # Initialize Faker once to be used by all agents
 fake = Faker('en_IN')
+
 
 class BaseAgent:
     """
     The parent agent class containing standardized fields,
     transaction logging, and common behavior across all agent archetypes.
+    Updated to handle realistic P2P transactions as banks see them.
     """
     STANDARDIZED_FIELDS = {
         # Core Profile
@@ -47,6 +52,7 @@ class BaseAgent:
         "ecommerce_avg_ticket_size": "N/A",
     }
 
+
     def __init__(self, **kwargs):
         # Universal Identity Attributes
         self.agent_id = str(uuid.uuid4())
@@ -60,12 +66,13 @@ class BaseAgent:
         for field, default in self.STANDARDIZED_FIELDS.items():
             setattr(self, field, kwargs.get(field, default))
         
-        # ✅ NEW: Initialize common P2P network attributes (to be populated by simulation engine)
+        # ✅ Initialize common P2P network attributes (to be populated by simulation engine)
         # These are common across many agent types and will be initialized as empty lists
         self._initialize_p2p_networks()
 
+
     def _initialize_p2p_networks(self):
-        """✅ NEW: Initialize common P2P network attributes that may be used by child classes."""
+        """✅ Initialize common P2P network attributes that may be used by child classes."""
         # Only initialize if not already set by child class
         if not hasattr(self, 'contacts'):
             self.contacts = []
@@ -74,8 +81,10 @@ class BaseAgent:
         if not hasattr(self, 'professional_network'):
             self.professional_network = []
 
+
     def __repr__(self):
         return f"<Agent {self.agent_id[:6]} - {self.archetype_name}, ₹{self.balance:.2f}>"
+
 
     def to_dict(self):
         """✅ Enhanced: Converts the agent's profile attributes to a dictionary for CSV/JSON export."""
@@ -84,7 +93,7 @@ class BaseAgent:
         # Remove non-serializable or sensitive data
         fields_to_remove = ['balance', 'txn_log']
         
-        # ✅ NEW: Remove P2P network lists from export (they contain object references)
+        # ✅ Remove P2P network lists from export (they contain object references)
         p2p_fields = [
             'contacts', 'family_members', 'professional_network', 'collaborators',
             'service_providers', 'dependents', 'employees', 'family_member_recipient',
@@ -99,12 +108,19 @@ class BaseAgent:
         
         return profile_dict
 
+
     def get_transaction_log(self):
         """Returns the list of all transactions performed by the agent."""
         return self.txn_log
 
+
     def log_transaction(self, txn_type, description, amount, date, channel="Other", recipient_id=None):
-        """✅ Enhanced: Logs a validated transaction and updates agent's balance with improved validation."""
+        """
+        ✅ UPDATED: Logs a validated transaction with realistic P2P descriptions that banks actually see.
+        
+        For P2P transfers, this method automatically formats descriptions to match what 
+        Indian banks actually record, regardless of the original description provided.
+        """
         # ✅ Enhanced validation
         if amount <= 0:
             return None  # Reject invalid amounts
@@ -122,18 +138,34 @@ class BaseAgent:
         if recipient_id == self.agent_id and ("to " in description.lower() or "from " in description.lower()):
             print(f"Warning: Potential recipient_id error for {txn_type} transaction by {self.agent_id[:6]}")
         
+        # ✅ REALISTIC DESCRIPTION HANDLING
+        # For P2P transfers, use bank-visible format regardless of original description
+        if recipient_id and recipient_id != self.agent_id:
+            # This is a P2P transfer - format as banks actually see it
+            bank_description = RealisticP2PStructure.format_p2p_transaction(
+                sender_id=self.agent_id,
+                recipient_id=recipient_id,
+                channel=channel,
+                transaction_type=txn_type,
+                include_reference=False  # Keep descriptions clean for ML model
+            )
+        else:
+            # Non-P2P transactions keep original descriptions
+            bank_description = description
+        
         txn = {
             "agent_id": self.agent_id,
             "date": date.strftime("%Y-%m-%d"),
             "type": txn_type,
             "channel": channel,
-            "description": description,
+            "description": bank_description,  # ✅ Bank-visible description
             "amount": round(amount, 2),
             "balance_after_txn": round(self.balance, 2),
             "recipient_id": recipient_id
         }
         self.txn_log.append(txn)
         return txn
+
 
     def _handle_daily_living_expenses(self, date, events, daily_spend_chance=0.4):
         """✅ Enhanced: Simulates generic daily expenses with improved error handling and variety."""
@@ -169,21 +201,25 @@ class BaseAgent:
                 # ✅ Enhanced: More specific error handling
                 pass
 
+
     def get_balance(self):
-        """✅ NEW: Getter method for current balance."""
+        """✅ Getter method for current balance."""
         return self.balance
 
+
     def has_sufficient_balance(self, amount):
-        """✅ NEW: Check if agent has sufficient balance for a transaction."""
+        """✅ Check if agent has sufficient balance for a transaction."""
         return self.balance >= amount
 
+
     def get_network_size(self, network_name):
-        """✅ NEW: Get the size of a specific P2P network."""
+        """✅ Get the size of a specific P2P network."""
         network = getattr(self, network_name, [])
         return len(network) if network else 0
 
+
     def get_total_network_connections(self):
-        """✅ NEW: Get total number of P2P connections across all networks."""
+        """✅ Get total number of P2P connections across all networks."""
         network_attrs = [
             'contacts', 'family_members', 'professional_network', 'collaborators',
             'service_providers', 'dependents', 'employees', 'fellow_agents',
@@ -207,9 +243,87 @@ class BaseAgent:
         
         return len(unique_connections)
 
+
     def can_send_p2p_transfer(self, amount, min_balance_buffer=100):
-        """✅ NEW: Check if agent can afford to send a P2P transfer while maintaining minimum balance."""
+        """✅ Check if agent can afford to send a P2P transfer while maintaining minimum balance."""
         return self.balance >= (amount + min_balance_buffer)
+
+
+    def is_p2p_transaction(self, description):
+        """✅ NEW: Check if a transaction description represents a P2P transfer."""
+        return RealisticP2PStructure.is_p2p_transaction(description)
+
+
+    def extract_counterparty_from_transaction(self, transaction):
+        """
+        ✅ NEW: Extract counterparty agent ID from a transaction record.
+        
+        Args:
+            transaction: Transaction dictionary with 'description' and 'type' keys
+            
+        Returns:
+            Counterparty agent ID if this is a P2P transaction, None otherwise
+        """
+        if not self.is_p2p_transaction(transaction.get('description', '')):
+            return None
+            
+        return RealisticP2PStructure.extract_counterparty_id(
+            transaction['description'], 
+            transaction['type']
+        )
+
+
+    def get_p2p_transaction_summary(self, days=30):
+        """
+        ✅ NEW: Get summary of P2P transactions for the last N days.
+        
+        Args:
+            days: Number of days to look back (default 30)
+            
+        Returns:
+            Dictionary with P2P transaction statistics
+        """
+        from datetime import datetime, timedelta
+        
+        cutoff_date = datetime.now() - timedelta(days=days)
+        cutoff_str = cutoff_date.strftime("%Y-%m-%d")
+        
+        p2p_sent = []
+        p2p_received = []
+        unique_counterparties = set()
+        
+        for txn in self.txn_log:
+            if txn['date'] >= cutoff_str and self.is_p2p_transaction(txn['description']):
+                counterparty = self.extract_counterparty_from_transaction(txn)
+                if counterparty:
+                    unique_counterparties.add(counterparty)
+                    
+                if txn['type'] == 'DEBIT':
+                    p2p_sent.append(txn['amount'])
+                else:
+                    p2p_received.append(txn['amount'])
+        
+        return {
+            'total_sent': sum(p2p_sent),
+            'total_received': sum(p2p_received),
+            'num_sent_transactions': len(p2p_sent),
+            'num_received_transactions': len(p2p_received),
+            'unique_counterparties': len(unique_counterparties),
+            'avg_sent_amount': sum(p2p_sent) / len(p2p_sent) if p2p_sent else 0,
+            'avg_received_amount': sum(p2p_received) / len(p2p_received) if p2p_received else 0,
+            'net_p2p_flow': sum(p2p_received) - sum(p2p_sent)
+        }
+
+
+    def get_realistic_p2p_channel(self):
+        """✅ NEW: Get a realistic P2P channel based on Indian market usage patterns."""
+        return RealisticP2PStructure.select_realistic_channel()
+
+
+    def validate_p2p_channel(self, channel):
+        """✅ NEW: Validate if a channel is supported for P2P transfers."""
+        return RealisticP2PStructure.validate_channel(channel)
+
 
     def act(self, date: datetime, **context):
         """Override this method in child classes to define agent behavior."""

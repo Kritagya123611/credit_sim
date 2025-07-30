@@ -1,16 +1,15 @@
-# agents/migrant.py
-
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+from config_pkg import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
 import numpy as np
-
+from config_pkg.p2p_structure import RealisticP2PStructure  # ✅ NEW: Import for realistic P2P handling
 
 class MigrantWorker(BaseAgent):
     """
     A multi-dimensional profile for a Migrant Worker.
     Behavior is modified by economic_class and financial_personality.
+    Updated with realistic P2P transaction handling.
     """
     def __init__(self, economic_class='Lower', financial_personality='Saver'):
         
@@ -76,12 +75,11 @@ class MigrantWorker(BaseAgent):
         self.remittance_percentage = random.uniform(0.6, 0.85) * (1.1 if financial_personality == 'Saver' else 1)
         self.recharge_chance = 0.07
 
-        # ✅ Updated P2P attributes - Migrant workers primarily send money home
+        # ✅ Enhanced P2P attributes - Migrant workers primarily send money home
         self.family_back_home = []  # To be populated by simulation engine
-        self.p2p_transfer_chance = 0.30 * personality_config.get('spend_chance_mod', 1.0)  # High frequency for remittances
         
-        # Emergency and festival transfer patterns
-        self.emergency_transfer_chance = 0.05  # 5% chance of emergency transfers
+        self.p2p_transfer_chance = 0.30 * personality_config.get('spend_chance_mod', 1.0)
+        self.emergency_transfer_chance = 0.05
         self.festival_months = [3, 10, 11]  # Holi, Diwali, etc.
         
         # Track last remittance to avoid over-sending
@@ -90,7 +88,7 @@ class MigrantWorker(BaseAgent):
         self.balance = random.uniform(100, 500)
 
     def _handle_income(self, date, events):
-        """✅ Separated income handling from P2P transfers."""
+        """✅ UPDATED: Separated income handling from P2P transfers."""
         is_payday = False
         wage_amount = 0
 
@@ -116,7 +114,7 @@ class MigrantWorker(BaseAgent):
                 events.append(cash_txn)
 
     def _handle_regular_remittances(self, date, events, context):
-        """✅ NEW: Handles regular scheduled remittances home."""
+        """✅ UPDATED: Handles regular scheduled remittances home with realistic channels."""
         # Send money home after payday (within 2 days of receiving wage)
         is_remittance_window = False
         
@@ -131,25 +129,35 @@ class MigrantWorker(BaseAgent):
 
         if is_remittance_window and self.family_back_home:
             # Check if already sent this cycle
-            if self.last_remittance_date != date.strftime("%Y-%m-%d"):
+            current_date_key = date.strftime("%Y-%m-%d")
+            if self.last_remittance_date != current_date_key:
                 recipient = random.choice(self.family_back_home)
                 
                 # Calculate remittance based on available balance and percentage
                 available_for_remittance = self.balance * self.remittance_percentage
                 
                 if available_for_remittance >= 500:  # Minimum threshold
+                    # ✅ NEW: Select realistic channel based on amount
+                    if available_for_remittance > 50000:
+                        channel = random.choice(['IMPS', 'NEFT'])
+                    else:
+                        channel = RealisticP2PStructure.select_realistic_channel()
+                    
                     context.get('p2p_transfers', []).append({
                         'sender': self, 
                         'recipient': recipient, 
-                        'amount': available_for_remittance, 
-                        'desc': f'Family Remittance to {self.home_state}',
-                        'channel': 'UPI'
+                        'amount': round(available_for_remittance, 2), 
+                        'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                        'channel': channel  # ✅ Realistic channel
                     })
-                    self.last_remittance_date = date.strftime("%Y-%m-%d")
+                    self.last_remittance_date = current_date_key
 
-    def _handle_p2p_transfers(self, date, events, context):
-        """✅ NEW: Handles additional P2P transfers beyond regular remittances."""
-        if self.family_back_home and random.random() < self.p2p_transfer_chance:
+    def _handle_additional_family_transfers(self, date, events, context):
+        """✅ UPDATED: Handles additional P2P transfers beyond regular remittances with realistic channels."""
+        if (self.family_back_home and 
+            random.random() < self.p2p_transfer_chance and
+            self.balance > 500):
+            
             recipient = random.choice(self.family_back_home)
             
             # Base amount for non-remittance transfers
@@ -158,33 +166,25 @@ class MigrantWorker(BaseAgent):
             # Increase during festival months
             if date.month in self.festival_months:
                 base_amount *= random.uniform(1.5, 2.5)
-                transfer_desc = random.choice([
-                    'Festival Money', 
-                    'Religious Celebration', 
-                    'Holiday Support', 
-                    'Special Occasion'
-                ])
-            else:
-                transfer_desc = random.choice([
-                    'Emergency Support', 
-                    'Medical Help', 
-                    'Additional Support',
-                    'Urgent Need',
-                    'Family Emergency'
-                ])
             
             # Only send if sufficient balance
             if self.balance > base_amount + 200:  # Keep some buffer
+                # ✅ NEW: Select realistic channel
+                if base_amount > 50000:
+                    channel = random.choice(['IMPS', 'NEFT'])
+                else:
+                    channel = RealisticP2PStructure.select_realistic_channel()
+                
                 context.get('p2p_transfers', []).append({
                     'sender': self, 
                     'recipient': recipient, 
                     'amount': round(base_amount, 2), 
-                    'desc': transfer_desc,
-                    'channel': 'UPI'
+                    'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                    'channel': channel  # ✅ Realistic channel
                 })
 
     def _handle_emergency_transfers(self, date, events, context):
-        """✅ NEW: Handles urgent emergency transfers home."""
+        """✅ UPDATED: Handles urgent emergency transfers home with realistic channels."""
         if (self.family_back_home and 
             random.random() < self.emergency_transfer_chance and 
             self.balance > 1000):  # Need significant balance for emergency
@@ -193,12 +193,18 @@ class MigrantWorker(BaseAgent):
             # Emergency transfers are typically larger
             emergency_amount = self.balance * random.uniform(0.4, 0.7)
             
+            # ✅ NEW: Select realistic channel based on amount
+            if emergency_amount > 50000:
+                channel = random.choice(['IMPS', 'NEFT'])
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()
+            
             context.get('p2p_transfers', []).append({
                 'sender': self, 
                 'recipient': recipient, 
                 'amount': round(emergency_amount, 2), 
-                'desc': 'Family Emergency',
-                'channel': 'UPI'
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
             })
 
     def _handle_recharge(self, date, events):
@@ -209,12 +215,12 @@ class MigrantWorker(BaseAgent):
             if txn: events.append(txn)
 
     def act(self, date: datetime, **context):
-        """✅ Updated: Now includes comprehensive P2P transfer handling."""
+        """✅ Updated: Now includes comprehensive P2P transfer handling with realistic channels."""
         events = []
         self._handle_income(date, events)
-        self._handle_regular_remittances(date, events, context)  # ✅ Primary remittance logic
-        self._handle_p2p_transfers(date, events, context)        # ✅ Additional transfers
-        self._handle_emergency_transfers(date, events, context)  # ✅ Emergency transfers
+        self._handle_regular_remittances(date, events, context)        # ✅ Updated with realistic channels
+        self._handle_additional_family_transfers(date, events, context)  # ✅ Updated with realistic channels
+        self._handle_emergency_transfers(date, events, context)        # ✅ Updated with realistic channels
         self._handle_cash_withdrawals(date, events)
         self._handle_recharge(date, events)
         self._handle_daily_living_expenses(date, events)

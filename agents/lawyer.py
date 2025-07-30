@@ -1,16 +1,15 @@
-# agents/lawyer.py
-
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+from config_pkg import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
 import numpy as np
-
+from config_pkg.p2p_structure import RealisticP2PStructure  # ✅ NEW: Import for realistic P2P handling
 
 class Lawyer(BaseAgent):
     """
     A multi-dimensional profile for a Lawyer or Consultant.
     Behavior is modified by economic_class and financial_personality.
+    Updated with realistic P2P transaction handling.
     """
     def __init__(self, economic_class='Middle', financial_personality='Rational_Investor'):
         
@@ -75,14 +74,16 @@ class Lawyer(BaseAgent):
         self.spend_chance_mod = personality_config['spend_chance_mod']
         self.invest_chance_mod = personality_config['invest_chance_mod']
         
-        # ✅ Updated P2P attributes - Lawyers have professional and personal networks
+        # ✅ Enhanced P2P attributes - Lawyers have professional and personal networks
         self.professional_network = []  # To be populated by simulation engine
         self.junior_associate = None    # Single junior/associate for retainer payments
-        self.p2p_transfer_chance = 0.12 * personality_config.get('spend_chance_mod', 1.0)  # Moderate frequency
+        
+        self.p2p_transfer_chance = 0.12 * personality_config.get('spend_chance_mod', 1.0)
+        self.professional_transfer_chance = 0.08
+        self.client_refund_chance = 0.05
         
         # Professional payment cycles
         self.retainer_payment_day = 5
-        self.professional_transfer_chance = 0.08  # Additional professional transfers
 
         self.balance = random.uniform(avg_monthly * 1.5, avg_monthly * 3.0)
 
@@ -96,7 +97,7 @@ class Lawyer(BaseAgent):
                 self.has_large_cash_reserve = True
 
     def _handle_recurring_debits(self, date, events):
-        """✅ Updated: Handles regular monthly expenses (non-P2P)."""
+        """Handles regular monthly expenses (non-P2P)."""
         if self.has_loan_emi and date.day == 10:
             txn = self.log_transaction("DEBIT", "Loan EMI Payment", self.loan_emi_amount, date, channel="Auto_Debit")
             if txn: events.append(txn)
@@ -105,21 +106,33 @@ class Lawyer(BaseAgent):
             txn = self.log_transaction("DEBIT", "Professional Indemnity Insurance", self.prof_indemnity_premium, date, channel="Netbanking")
             if txn: events.append(txn)
 
-    def _handle_professional_payments(self, date, events, context):
-        """✅ NEW: Handles regular retainer and professional payments."""
+    def _handle_professional_retainer_payments(self, date, events, context):
+        """✅ UPDATED: Handles regular retainer payments with realistic channels."""
         # Monthly retainer payment to junior associate
-        if date.day == self.retainer_payment_day and self.junior_associate:
+        if (date.day == self.retainer_payment_day and 
+            self.junior_associate and 
+            self.balance > self.junior_retainer_fee):
+            
+            # ✅ NEW: Select realistic channel based on amount
+            if self.junior_retainer_fee > 50000:
+                channel = random.choice(['IMPS', 'NEFT'])
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()
+            
             context.get('p2p_transfers', []).append({
                 'sender': self,
                 'recipient': self.junior_associate,
-                'amount': self.junior_retainer_fee,
-                'desc': 'Junior/Retainer Fee',
-                'channel': 'UPI'
+                'amount': round(self.junior_retainer_fee, 2),
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
             })
 
-    def _handle_p2p_transfers(self, date, events, context):
-        """✅ NEW: Handles general professional and personal transfers."""
-        if self.professional_network and random.random() < self.p2p_transfer_chance:
+    def _handle_professional_network_transfers(self, date, events, context):
+        """✅ UPDATED: Handles professional network transfers with realistic channels."""
+        if (self.professional_network and 
+            random.random() < self.p2p_transfer_chance and
+            self.balance > 5000):
+            
             recipient = random.choice(self.professional_network)
             
             # Lawyers typically send higher amounts in professional context
@@ -135,55 +148,86 @@ class Lawyer(BaseAgent):
             elif self.economic_class in ['Lower', 'Lower_Middle']:
                 base_amount *= random.uniform(0.6, 0.8)
             
-            transfer_desc = random.choice([
-                'Professional Payment', 
-                'Client Refund', 
-                'Colleague Support', 
-                'Business Expense',
-                'Professional Fee',
-                'Consultation Payment',
-                'Legal Service Fee'
-            ])
+            # ✅ NEW: Select realistic channel based on amount
+            if base_amount > 100000:
+                channel = random.choice(['NEFT', 'RTGS'])  # Very high amounts use secure channels
+            elif base_amount > 50000:
+                channel = random.choice(['IMPS', 'NEFT'])
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()
             
             context.get('p2p_transfers', []).append({
                 'sender': self, 
                 'recipient': recipient, 
                 'amount': round(base_amount, 2), 
-                'desc': transfer_desc,
-                'channel': 'UPI'
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
             })
 
-    def _handle_professional_networking(self, date, events, context):
-        """✅ NEW: Handles additional professional network transfers."""
+    def _handle_professional_networking_transfers(self, date, events, context):
+        """✅ UPDATED: Handles additional professional network transfers with realistic channels."""
         # Additional professional transfers (referral fees, shared costs, etc.)
         if (self.professional_network and 
             random.random() < self.professional_transfer_chance and 
-            self.balance > 10000):  # Only if sufficient balance
+            self.balance > 10000):
             
             recipient = random.choice(self.professional_network)
             
-            # Professional networking amounts are typically moderate
+            # Professional networking amounts are typically moderate to high
             amount = random.uniform(1500, 5000)
             
             # Higher amounts during large cash reserve periods
             if self.has_large_cash_reserve:
                 amount *= random.uniform(1.5, 2.5)
             
-            transfer_desc = random.choice([
-                'Referral Fee', 
-                'Shared Office Expense', 
-                'Conference Cost Share',
-                'Professional Development',
-                'Bar Association Fee',
-                'Joint Case Expense'
-            ])
+            # Adjust based on economic class
+            if self.economic_class in ['High', 'Upper_Middle']:
+                amount *= random.uniform(1.4, 2.2)
+            
+            # ✅ NEW: Select realistic channel based on amount
+            if amount > 50000:
+                channel = random.choice(['IMPS', 'NEFT'])
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()
             
             context.get('p2p_transfers', []).append({
                 'sender': self, 
                 'recipient': recipient, 
                 'amount': round(amount, 2), 
-                'desc': transfer_desc,
-                'channel': 'UPI'
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
+            })
+
+    def _handle_client_refunds(self, date, events, context):
+        """✅ NEW: Handles client refunds and professional service payments."""
+        if (self.professional_network and 
+            random.random() < self.client_refund_chance and
+            self.has_large_cash_reserve and
+            self.balance > 15000):
+            
+            recipient = random.choice(self.professional_network)
+            
+            # Client refunds are typically larger amounts
+            refund_amount = random.uniform(5000, 25000)
+            
+            # Adjust based on economic class and cash reserves
+            if self.economic_class in ['High', 'Upper_Middle']:
+                refund_amount *= random.uniform(1.5, 3.0)
+            
+            # ✅ NEW: Select appropriate channel for larger refunds
+            if refund_amount > 100000:
+                channel = random.choice(['NEFT', 'RTGS'])
+            elif refund_amount > 50000:
+                channel = random.choice(['IMPS', 'NEFT'])
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()
+            
+            context.get('p2p_transfers', []).append({
+                'sender': self, 
+                'recipient': recipient, 
+                'amount': round(refund_amount, 2), 
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
             })
 
     def _handle_spending_and_investment(self, date, events):
@@ -204,13 +248,14 @@ class Lawyer(BaseAgent):
             if txn: events.append(txn)
 
     def act(self, date: datetime, **context):
-        """✅ Updated: Now includes comprehensive P2P transfer handling."""
+        """✅ Updated: Now includes comprehensive P2P transfer handling with realistic channels."""
         events = []
         self._handle_lumpy_income(date, events)
         self._handle_recurring_debits(date, events)
-        self._handle_professional_payments(date, events, context)    # ✅ Regular professional payments
-        self._handle_p2p_transfers(date, events, context)            # ✅ General P2P transfers
-        self._handle_professional_networking(date, events, context)  # ✅ Professional networking transfers
+        self._handle_professional_retainer_payments(date, events, context)     # ✅ Updated with realistic channels
+        self._handle_professional_network_transfers(date, events, context)     # ✅ Updated with realistic channels
+        self._handle_professional_networking_transfers(date, events, context)  # ✅ Updated with realistic channels
+        self._handle_client_refunds(date, events, context)                     # ✅ NEW: Client refunds
         self._handle_spending_and_investment(date, events)
         self._handle_daily_living_expenses(date, events)
         return events

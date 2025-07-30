@@ -1,16 +1,15 @@
-# agents/delivery_agent.py
-
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+from config_pkg import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
 import numpy as np
-
+from config_pkg.p2p_structure import RealisticP2PStructure  # ✅ NEW: Import for realistic P2P handling
 
 class DeliveryAgent(BaseAgent):
     """
     A multi-dimensional profile for a Delivery Agent.
     Behavior is modified by economic_class and financial_personality.
+    Updated with realistic P2P transaction handling.
     """
     def __init__(self, economic_class='Lower', financial_personality='Over_Spender'):
         
@@ -79,16 +78,16 @@ class DeliveryAgent(BaseAgent):
         # ✅ Added P2P attributes - Delivery agents have tight-knit networks
         self.fellow_agents = []  # To be populated by simulation engine
         self.family_back_home = []  # Family members for remittances
-        self. peer_network = []  # Other gig workers and similar economic group
+        self.peer_network = []  # Other gig workers and similar economic group
         
-        self.p2p_transfer_chance = 0.20 * personality_config.get('spend_chance_mod', 1.0)  # Moderate to high frequency
-        self.agent_support_chance = 0.15  # Support within delivery agent community
-        self.family_remittance_chance = 0.12  # Sending money home
-        self.emergency_help_chance = 0.08  # Emergency mutual aid
+        self.p2p_transfer_chance = 0.20 * personality_config.get('spend_chance_mod', 1.0)
+        self.agent_support_chance = 0.15
+        self.family_remittance_chance = 0.12
+        self.emergency_help_chance = 0.08
         
         # Operational sharing patterns common in delivery agent community
-        self.fuel_sharing_chance = 0.10  # Sharing fuel costs
-        self.vehicle_maintenance_sharing = 0.05  # Sharing repair costs
+        self.fuel_sharing_chance = 0.10
+        self.vehicle_maintenance_sharing = 0.05
         
         # Track last remittance to manage frequency
         self.last_family_remittance_date = None
@@ -136,7 +135,7 @@ class DeliveryAgent(BaseAgent):
             if txn: events.append(txn)
 
     def _handle_agent_community_transfers(self, date, events, context):
-        """✅ NEW: Handles transfers within delivery agent network."""
+        """✅ UPDATED: Handles transfers within delivery agent network with realistic channels."""
         if self.fellow_agents and random.random() < self.p2p_transfer_chance:
             recipient = random.choice(self.fellow_agents)
             
@@ -148,26 +147,19 @@ class DeliveryAgent(BaseAgent):
             amount = min(base_amount, max_sendable)
             
             if amount >= 50:  # Minimum viable transfer
-                transfer_desc = random.choice([
-                    'Fuel Share',
-                    'Agent Support',
-                    'Repair Help',
-                    'Friend Loan',
-                    'Meal Share',
-                    'Emergency Advance',
-                    'Peer Support'
-                ])
+                # ✅ NEW: Select realistic channel
+                channel = RealisticP2PStructure.select_realistic_channel()
                 
                 context.get('p2p_transfers', []).append({
                     'sender': self, 
                     'recipient': recipient, 
                     'amount': round(amount, 2), 
-                    'desc': transfer_desc,
-                    'channel': 'UPI'
+                    'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                    'channel': channel  # ✅ Realistic channel
                 })
 
     def _handle_family_remittances(self, date, events, context):
-        """✅ NEW: Handles sending money back home to family."""
+        """✅ UPDATED: Handles sending money back home with realistic channels."""
         # Send money home weekly or bi-weekly
         current_week = date.isocalendar()[1]
         send_this_week = current_week % 2 == 0  # Every other week
@@ -192,17 +184,23 @@ class DeliveryAgent(BaseAgent):
                     remittance_amount *= random.uniform(0.7, 1.0)  # Over-spenders send less
                 
                 if remittance_amount >= 500:  # Minimum meaningful remittance
+                    # ✅ NEW: Select appropriate channel for remittances
+                    if remittance_amount > 50000:
+                        channel = random.choice(['IMPS', 'NEFT'])
+                    else:
+                        channel = RealisticP2PStructure.select_realistic_channel()
+                    
                     context.get('p2p_transfers', []).append({
                         'sender': self, 
                         'recipient': recipient, 
                         'amount': round(remittance_amount, 2), 
-                        'desc': 'Family Remittance',
-                        'channel': 'UPI'
+                        'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                        'channel': channel  # ✅ Realistic channel
                     })
                     self.last_family_remittance_date = current_date_key
 
     def _handle_operational_sharing(self, date, events, context):
-        """✅ NEW: Handles operational cost sharing common in delivery community."""
+        """✅ UPDATED: Handles operational cost sharing with realistic channels."""
         # Fuel sharing
         if (self.fellow_agents and 
             random.random() < self.fuel_sharing_chance and
@@ -211,12 +209,15 @@ class DeliveryAgent(BaseAgent):
             recipient = random.choice(self.fellow_agents)
             fuel_share_amount = random.uniform(100, 300)
             
+            # ✅ NEW: Select realistic channel
+            channel = RealisticP2PStructure.select_realistic_channel()
+            
             context.get('p2p_transfers', []).append({
                 'sender': self, 
                 'recipient': recipient, 
                 'amount': round(fuel_share_amount, 2), 
-                'desc': 'Fuel Cost Share',
-                'channel': 'UPI'
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
             })
         
         # Vehicle maintenance sharing
@@ -232,16 +233,19 @@ class DeliveryAgent(BaseAgent):
             final_amount = min(maintenance_share, max_share)
             
             if final_amount >= 100:
+                # ✅ NEW: Select realistic channel
+                channel = RealisticP2PStructure.select_realistic_channel()
+                
                 context.get('p2p_transfers', []).append({
                     'sender': self, 
                     'recipient': recipient, 
                     'amount': round(final_amount, 2), 
-                    'desc': random.choice(['Vehicle Repair Share', 'Maintenance Help', 'Bike Service Share']),
-                    'channel': 'UPI'
+                    'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                    'channel': channel  # ✅ Realistic channel
                 })
 
     def _handle_emergency_support(self, date, events, context):
-        """✅ NEW: Handles emergency support within delivery agent community."""
+        """✅ UPDATED: Handles emergency support with realistic channels."""
         if (self.fellow_agents and 
             random.random() < self.emergency_help_chance and
             self.balance > 800):  # Need decent balance for emergency help
@@ -256,22 +260,19 @@ class DeliveryAgent(BaseAgent):
             final_amount = min(emergency_amount, max_emergency)
             
             if final_amount >= 200:  # Minimum for meaningful emergency help
+                # ✅ NEW: Select realistic channel
+                channel = RealisticP2PStructure.select_realistic_channel()
+                
                 context.get('p2p_transfers', []).append({
                     'sender': self, 
                     'recipient': recipient, 
                     'amount': round(final_amount, 2), 
-                    'desc': random.choice([
-                        'Agent Emergency',
-                        'Medical Help',
-                        'Urgent Support',
-                        'Crisis Help',
-                        'Emergency Advance'
-                    ]),
-                    'channel': 'UPI'
+                    'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                    'channel': channel  # ✅ Realistic channel
                 })
 
     def _handle_peer_network_transfers(self, date, events, context):
-        """✅ NEW: Handles transfers with broader peer network (other gig workers)."""
+        """✅ UPDATED: Handles transfers with broader peer network with realistic channels."""
         if (self.peer_network and 
             random.random() < self.agent_support_chance and
             self.balance > 400):
@@ -286,32 +287,29 @@ class DeliveryAgent(BaseAgent):
             final_amount = min(peer_amount, max_peer)
             
             if final_amount >= 75:  # Minimum for peer transfers
+                # ✅ NEW: Select realistic channel
+                channel = RealisticP2PStructure.select_realistic_channel()
+                
                 context.get('p2p_transfers', []).append({
                     'sender': self, 
                     'recipient': recipient, 
                     'amount': round(final_amount, 2), 
-                    'desc': random.choice([
-                        'Gig Worker Support',
-                        'Peer Help',
-                        'Worker Solidarity',
-                        'Community Support',
-                        'Mutual Aid'
-                    ]),
-                    'channel': 'UPI'
+                    'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                    'channel': channel  # ✅ Realistic channel
                 })
 
     def act(self, date: datetime, **context):
         """
-        ✅ Updated: Simulates the daily high-velocity financial life of a delivery agent with P2P transfers.
+        ✅ Updated: Simulates the daily high-velocity financial life of a delivery agent with realistic P2P transfers.
         """
         events = []
         self._handle_income_and_settlements(date, events)
         self._handle_fixed_debits(date, events)
         self._handle_operational_spending(date, events)
-        self._handle_agent_community_transfers(date, events, context)  # ✅ Agent network transfers
-        self._handle_family_remittances(date, events, context)         # ✅ Family remittances
-        self._handle_operational_sharing(date, events, context)        # ✅ Operational cost sharing
-        self._handle_emergency_support(date, events, context)          # ✅ Emergency support
-        self._handle_peer_network_transfers(date, events, context)     # ✅ Broader peer network
+        self._handle_agent_community_transfers(date, events, context)  # ✅ Updated with realistic channels
+        self._handle_family_remittances(date, events, context)         # ✅ Updated with realistic channels
+        self._handle_operational_sharing(date, events, context)        # ✅ Updated with realistic channels
+        self._handle_emergency_support(date, events, context)          # ✅ Updated with realistic channels
+        self._handle_peer_network_transfers(date, events, context)     # ✅ Updated with realistic channels
         self._handle_daily_living_expenses(date, events, daily_spend_chance=0.6)
         return events

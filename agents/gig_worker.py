@@ -1,15 +1,15 @@
-# agents/gig_worker.py
-
 import random
 from datetime import datetime
 from agents.base_agent import BaseAgent
-from config import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
+from config_pkg import ECONOMIC_CLASSES, FINANCIAL_PERSONALITIES, ARCHETYPE_BASE_RISK, get_risk_profile_from_score
 import numpy as np
+from config_pkg.p2p_structure import RealisticP2PStructure  # ✅ NEW: Import for realistic P2P handling
 
 class GigWorker(BaseAgent):
     """
     A multi-dimensional profile for a Gig Worker or Freelancer.
     Behavior is modified by economic_class and financial_personality.
+    Updated with realistic P2P transaction handling.
     """
     def __init__(self, economic_class='Lower_Middle', financial_personality='Over_Spender'):
         
@@ -73,10 +73,16 @@ class GigWorker(BaseAgent):
         
         self.daily_spend_chance = 0.80 * personality_config['spend_chance_mod']
         self.prepaid_recharge_chance = 0.10 * personality_config['spend_chance_mod']
-        self.p2p_transfer_chance = 0.1 * personality_config['spend_chance_mod']
-
-        # This can be populated by the simulation engine
-        self.contacts = []
+        
+        # ✅ Enhanced P2P attributes - Gig workers have diverse peer networks
+        self.contacts = []  # To be populated by simulation engine
+        self.peer_network = []  # Other gig workers and freelancers
+        self.client_network = []  # Potential clients for payments
+        
+        self.p2p_transfer_chance = 0.15 * personality_config['spend_chance_mod']
+        self.peer_support_chance = 0.10  # Supporting other gig workers
+        self.client_advance_chance = 0.05  # Receiving advances from clients
+        self.emergency_help_chance = 0.08  # Emergency mutual aid
 
         self.balance = random.uniform(avg_monthly_income * 0.05, avg_monthly_income * 0.2)
 
@@ -108,26 +114,124 @@ class GigWorker(BaseAgent):
             txn = self.log_transaction("DEBIT", f"UPI Spend - {spend_category}", spend_amount, date, channel="UPI")
             if txn: events.append(txn)
 
-    def _handle_p2p_transfers(self, date, events, context):
-        """Simulates sending money to contacts."""
-        if self.contacts and random.random() < self.p2p_transfer_chance:
+    def _handle_peer_network_transfers(self, date, events, context):
+        """✅ UPDATED: Handles transfers within gig worker peer network with realistic channels."""
+        if (self.contacts and 
+            random.random() < self.p2p_transfer_chance and
+            self.balance > 500):
+            
             recipient = random.choice(self.contacts)
             amount = random.uniform(200, 1000)
             
-            # Use the P2P transfer queue in the simulation engine
+            # ✅ NEW: Select realistic channel
+            channel = RealisticP2PStructure.select_realistic_channel()
+            
             context.get('p2p_transfers', []).append({
                 'sender': self, 
                 'recipient': recipient, 
                 'amount': amount, 
-                'desc': 'P2P Transfer to Friend',
-                'channel': 'UPI' # Specify UPI as the channel for these transfers
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
+            })
+
+    def _handle_peer_support_activities(self, date, events, context):
+        """✅ NEW: Handles mutual support within gig worker community."""
+        if (self.peer_network and 
+            random.random() < self.peer_support_chance and
+            self.balance > 800):  # Need decent balance for support
+            
+            recipient = random.choice(self.peer_network)
+            
+            # Support amounts based on current balance
+            support_amount = random.uniform(300, 1200)
+            
+            # Can't give more than 30% of balance
+            max_support = self.balance * 0.3
+            final_amount = min(support_amount, max_support)
+            
+            if final_amount >= 200:  # Minimum for meaningful support
+                # ✅ NEW: Select realistic channel
+                channel = RealisticP2PStructure.select_realistic_channel()
+                
+                context.get('p2p_transfers', []).append({
+                    'sender': self, 
+                    'recipient': recipient, 
+                    'amount': round(final_amount, 2), 
+                    'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                    'channel': channel  # ✅ Realistic channel
+                })
+
+    def _handle_emergency_support(self, date, events, context):
+        """✅ NEW: Handles emergency support within gig worker network."""
+        if (self.contacts and 
+            random.random() < self.emergency_help_chance and
+            self.balance > 1000):  # Need good balance for emergency help
+            
+            recipient = random.choice(self.contacts)
+            
+            # Emergency amounts
+            emergency_amount = random.uniform(500, 2000)
+            
+            # Adjust based on financial personality
+            if self.financial_personality == 'Over_Spender':
+                emergency_amount *= random.uniform(1.2, 1.5)  # More generous
+            elif self.financial_personality == 'Saver':
+                emergency_amount *= random.uniform(0.7, 1.0)  # More conservative
+            
+            # Can't give more than 40% of balance in emergency
+            max_emergency = self.balance * 0.4
+            final_amount = min(emergency_amount, max_emergency)
+            
+            if final_amount >= 300:  # Minimum for emergency help
+                # ✅ NEW: Select realistic channel
+                channel = RealisticP2PStructure.select_realistic_channel()
+                
+                context.get('p2p_transfers', []).append({
+                    'sender': self, 
+                    'recipient': recipient, 
+                    'amount': round(final_amount, 2), 
+                    'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                    'channel': channel  # ✅ Realistic channel
+                })
+
+    def _handle_client_advance_requests(self, date, events, context):
+        """✅ NEW: Handles requesting advances from clients."""
+        if (self.client_network and 
+            random.random() < self.client_advance_chance and
+            self.balance < 2000):  # Only when running low on funds
+            
+            client = random.choice(self.client_network)
+            
+            # Advance amounts based on typical project values
+            advance_amount = random.uniform(1000, 5000)
+            
+            # Adjust based on economic class
+            if self.economic_class in ['Lower', 'Lower_Middle']:
+                advance_amount *= random.uniform(0.5, 1.0)  # Smaller advances
+            
+            # ✅ NEW: Select realistic channel
+            if advance_amount > 50000:
+                channel = random.choice(['IMPS', 'NEFT'])
+            else:
+                channel = RealisticP2PStructure.select_realistic_channel()
+            
+            context.get('p2p_transfers', []).append({
+                'sender': client,  # Client sends advance to gig worker
+                'recipient': self, 
+                'amount': round(advance_amount, 2), 
+                'desc': 'UPI P2P Transfer',  # ✅ Standardized description
+                'channel': channel  # ✅ Realistic channel
             })
 
     def act(self, date: datetime, **context):
+        """✅ Updated: Now includes comprehensive P2P transfer handling with realistic channels."""
         events = []
         self._handle_income(date, events)
         self._handle_bills(date, events)
         self._handle_daily_spending(date, events)
-        self._handle_p2p_transfers(date, events, context)
+        self._handle_peer_network_transfers(date, events, context)    # ✅ Updated with realistic channels
+        self._handle_peer_support_activities(date, events, context)   # ✅ NEW: Peer support activities
+        self._handle_emergency_support(date, events, context)         # ✅ NEW: Emergency support
+        self._handle_client_advance_requests(date, events, context)   # ✅ NEW: Client advance requests
         self._handle_daily_living_expenses(date, events)
         return events
