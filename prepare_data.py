@@ -13,77 +13,86 @@ except FileNotFoundError:
     print("Error: 'output/agents.csv' not found. Please run the simulation_engine.py first.")
     exit()
 
-# --- Define Clean Features (NO TARGET LEAKAGE) ---
+# --- Define Clean Features (NO TARGET LEAKAGE, NO KEYWORDS) ---
 
-# ✅ Core Risk & Financial Profile Features
+# ✅ Core Risk & Financial Profile Features (NUMERICAL/ENCODED ONLY)
 core_features = [
-    'risk_score',                    # Numerical risk assessment
-    'economic_class',                # Socio-economic category
-    'financial_personality',         # Behavioral classification
-    'employment_status',             # Employment category
-    'employment_verification',       # Verification status
-    'income_type',                   # Income source category
-    'income_pattern',                # Income regularity pattern
+    'economic_class',                # Socio-economic category (encoded)
+    'financial_personality',         # Behavioral classification (encoded)
+    'employment_status',             # Employment category (encoded)
+    'employment_verification',       # Verification status (encoded)
+    'income_type',                   # Income source category (encoded)
+    'income_pattern',                # Income regularity pattern (encoded)
 ]
 
-# ✅ Behavioral Scores (Numerical patterns)
+# ✅ Behavioral Scores (Pure numerical patterns - NO KEYWORDS)
 behavioral_scores = [
-    'device_consistency_score',      # Device usage patterns
-    'ip_consistency_score',          # Location consistency
-    'savings_retention_rate',        # Savings behavior
-    'utility_payment_status',        # Payment reliability
-    'loan_emi_payment_status',       # EMI payment behavior
+    'device_consistency_score',      # Device usage patterns (0-1 score)
+    'ip_consistency_score',          # Location consistency (0-1 score)
+    'savings_retention_rate',        # Savings behavior (encoded level)
+    'utility_payment_status',        # Payment reliability (encoded)
+    'loan_emi_payment_status',       # EMI payment behavior (encoded)
 ]
 
-# ✅ Digital Behavior Patterns
+# ✅ Digital Behavior Patterns (Encoded behavioral indicators)
 digital_patterns = [
-    'login_pattern',                 # Account access patterns
-    'ecommerce_activity_level',      # Online spending patterns
-    'ecommerce_avg_ticket_size',     # Average transaction size
-    'primary_digital_channels',      # Preferred payment channels
-    'mobile_plan_type',              # Mobile plan category
-    'sim_churn_rate',                # SIM change frequency
+    'login_pattern',                 # Account access patterns (encoded)
+    'ecommerce_activity_level',      # Online spending patterns (encoded)
+    'ecommerce_avg_ticket_size',     # Average transaction size (encoded)
+    'primary_digital_channels',      # Preferred payment channels (encoded)
+    'mobile_plan_type',              # Mobile plan category (encoded)
+    'sim_churn_rate',                # SIM change frequency (encoded)
 ]
 
-# ✅ Financial Activity Ratios & Frequencies
+# ✅ Financial Activity Ratios & Frequencies (Pure numerical)
 financial_ratios = [
-    'emi_percentage',                # EMI to income ratio (if exists)
-    'investment_percentage',         # Investment allocation (if exists)
-    'insurance_percentage',          # Insurance spending ratio (if exists)
-    'remittance_percentage',         # Money transfer ratio (if exists)
+    'emi_percentage',                # EMI to income ratio
+    'investment_percentage',         # Investment allocation
+    'insurance_percentage',          # Insurance spending ratio
+    'remittance_percentage',         # Money transfer ratio
     'p2p_transfer_chance',           # P2P transfer frequency
 ]
 
-# ✅ Behavioral Activity Patterns
+# ✅ Behavioral Activity Patterns (Probability scores - NO KEYWORDS)
 activity_patterns = [
-    'daily_work_chance',             # Work consistency
-    'recharge_chance',               # Mobile recharge frequency
-    'emergency_help_chance',         # Emergency behavior
-    'family_support_chance',         # Family support patterns
-    'professional_transfer_chance',  # Professional payment patterns
-    'social_transfer_chance',        # Social transfer patterns
-    'community_support_chance',      # Community support behavior
+    'daily_work_chance',             # Work consistency (0-1 probability)
+    'recharge_chance',               # Mobile recharge frequency (0-1 probability)
+    'emergency_help_chance',         # Emergency behavior (0-1 probability)
+    'family_support_chance',         # Family support patterns (0-1 probability)
+    'professional_transfer_chance',  # Professional payment patterns (0-1 probability)
+    'social_transfer_chance',        # Social transfer patterns (0-1 probability)
+    'community_support_chance',      # Community support behavior (0-1 probability)
 ]
 
-# ✅ Binary Indicators
+# ✅ Binary Indicators (0/1 flags - NO KEYWORDS)
 binary_indicators = [
-    'has_investment_activity',       # Investment activity flag
-    'has_loan_emi',                  # Loan EMI flag
-    'has_insurance_payments',        # Insurance payment flag
+    'has_investment_activity',       # Investment activity flag (0/1)
+    'has_loan_emi',                  # Loan EMI flag (0/1)
+    'has_insurance_payments',        # Insurance payment flag (0/1)
 ]
 
-# ✅ FIXED: Separate identifiers and target variables
-identifiers = ['agent_id']  # For graph construction only
+# ✅ Node identifier (for graph construction only)
+identifiers = ['agent_id']
 
-# ✅ FIXED: Target variables (NOT features)
-target_variables = ['fraud_type', 'ring_id', 'device_id']
+# ✅ Target variables for credit risk (NOT features - separate labels)
+credit_risk_targets = ['risk_score', 'risk_profile']
 
-# ✅ FIXED: Combine only CLEAN features (no target leakage)
+# ✅ EXCLUDED: No keyword-based or target leakage features
+excluded_features = [
+    'fraud_type', 'ring_id', 'device_id',        # Fraud-related (not credit risk)
+    'archetype_name',                             # Keyword-based archetype
+    'name', 'email', 'account_no',               # Direct identifiers
+    'risk_score',                                 # Target variable (separate)
+    'risk_profile'                                # Target variable (separate)
+]
+
+# ✅ Combine only CLEAN pattern-based features
 features_to_keep = (identifiers + core_features + behavioral_scores + 
                    digital_patterns + financial_ratios + activity_patterns + 
                    binary_indicators)
 
-print(f"Defined {len(features_to_keep)} clean features (no target leakage)")
+print(f"Defined {len(features_to_keep)} clean pattern-based features")
+print(f"Excluded keyword/leakage features: {excluded_features}")
 
 # --- Filter DataFrame to Keep Only Clean Features ---
 available_features = [col for col in features_to_keep if col in df.columns]
@@ -93,30 +102,36 @@ print(f"Available clean features: {len(available_features)}")
 if missing_features:
     print(f"Missing features (will be skipped): {missing_features}")
 
-# Create cleaned dataset with only pattern-based features (NO target leakage)
+# Create cleaned dataset with only pattern-based features
 df_cleaned = df[available_features].copy()
 
-# --- Separate Features and Labels Properly ---
-# ✅ FIXED: Use fraud_type as label, but NOT as feature
+# --- Extract Credit Risk Labels (Separate from Features) ---
+credit_risk_labels = {}
+
+# Primary target: Risk score (continuous 0-1)
+if 'risk_score' in df.columns:
+    credit_risk_labels['risk_score'] = df['risk_score'].copy()
+    print("✅ Extracted 'risk_score' as primary target (regression)")
+
+# Secondary target: Risk profile (categorical)
+if 'risk_profile' in df.columns:
+    credit_risk_labels['risk_profile'] = df['risk_profile'].copy()
+    print("✅ Extracted 'risk_profile' as secondary target (classification)")
+
+# Keep fraud labels for validation/comparison (but NOT for training)
 if 'fraud_type' in df.columns:
-    labels = df['fraud_type'].copy()
-    print("Using 'fraud_type' as target variable")
-elif 'risk_profile' in df.columns:
-    labels = df['risk_profile'].copy()
-    print("Using 'risk_profile' as target variable")
-else:
-    print("Warning: No target variable found")
-    labels = None
+    credit_risk_labels['fraud_type'] = df['fraud_type'].copy()
+    print("ℹ️ Kept 'fraud_type' for validation (not used in training)")
 
-# ✅ FIXED: Features do NOT include target variables
-features = df_cleaned.copy()  # Only clean features, no targets
+# ✅ Features contain ONLY behavioral patterns (no targets, no keywords)
+features = df_cleaned.copy()
 
-print(f"Final feature set: {len(features.columns)} features")
-print(f"Features: {list(features.columns)}")
+print(f"Final feature set: {len(features.columns)} dimensions")
+print(f"Credit risk targets: {list(credit_risk_labels.keys())}")
 
-# --- Feature Engineering for GNN ---
+# --- Feature Engineering for GNN (NO KEYWORD DEPENDENCIES) ---
 
-# ✅ FIXED: Proper categorical feature identification
+# ✅ Categorical features (will be label encoded to numbers)
 categorical_features = [
     'economic_class',
     'financial_personality', 
@@ -135,9 +150,9 @@ categorical_features = [
     'sim_churn_rate'
 ]
 
-# Filter to only existing categorical features
+# Filter to existing categorical features and encode
 categorical_columns = [col for col in categorical_features if col in features.columns]
-print(f"Encoding {len(categorical_columns)} categorical features...")
+print(f"Encoding {len(categorical_columns)} categorical features to numbers...")
 
 label_encoders = {}
 for col in categorical_columns:
@@ -147,9 +162,8 @@ for col in categorical_columns:
     features[col] = le.fit_transform(features[col])
     label_encoders[col] = le
 
-# ✅ FIXED: Proper numerical feature identification
+# ✅ Numerical features (pure behavioral scores and ratios)
 numerical_features = [
-    'risk_score',
     'device_consistency_score',
     'ip_consistency_score',
     'emi_percentage',
@@ -166,16 +180,16 @@ numerical_features = [
     'community_support_chance'
 ]
 
-# Filter to only existing numerical features
+# Filter to existing numerical features
 numerical_columns = [col for col in numerical_features if col in features.columns]
-print(f"Processing {len(numerical_columns)} numerical features...")
+print(f"Processing {len(numerical_columns)} numerical behavioral features...")
 
-# Fill missing values with median for numerical columns
+# Fill missing values with median
 for col in numerical_columns:
     median_val = features[col].median()
     features[col] = features[col].fillna(median_val)
 
-# ✅ FIXED: Normalize numerical features (excluding agent_id)
+# ✅ Normalize numerical features (standardize to mean=0, std=1)
 scaler = StandardScaler()
 features_to_scale = [col for col in numerical_columns if col != 'agent_id']
 
@@ -183,10 +197,10 @@ if features_to_scale:
     features[features_to_scale] = scaler.fit_transform(features[features_to_scale])
     print(f"Normalized {len(features_to_scale)} numerical features")
 
-# ✅ Handle binary features
+# ✅ Binary features (ensure 0/1 encoding)
 binary_columns = [col for col in binary_indicators if col in features.columns]
 for col in binary_columns:
-    # Ensure binary features are 0/1
+    # Convert to integer 0/1
     features[col] = features[col].astype(int)
 
 print(f"Processed {len(binary_columns)} binary features")
@@ -197,16 +211,24 @@ print(f"Total agents: {len(features)}")
 print(f"Total features: {len(features.columns)}")
 print(f"Missing values: {features.isnull().sum().sum()}")
 
-if labels is not None:
-    print(f"Target distribution:")
-    print(labels.value_counts(dropna=False))
+# ✅ Credit Risk Target Analysis
+if 'risk_score' in credit_risk_labels:
+    risk_scores = credit_risk_labels['risk_score']
+    print(f"\nRisk Score Distribution:")
+    print(f"  Mean: {risk_scores.mean():.3f}")
+    print(f"  Std: {risk_scores.std():.3f}")
+    print(f"  Range: [{risk_scores.min():.3f}, {risk_scores.max():.3f}]")
+
+if 'risk_profile' in credit_risk_labels:
+    risk_profiles = credit_risk_labels['risk_profile']
+    print(f"\nRisk Profile Distribution:")
+    print(risk_profiles.value_counts())
     
     # Check for class imbalance
-    if len(labels.value_counts(dropna=False)) > 1:
-        min_class_ratio = labels.value_counts(dropna=False).min() / len(labels)
-        print(f"Minimum class ratio: {min_class_ratio:.3f}")
-        if min_class_ratio < 0.05:
-            print("Warning: Severe class imbalance detected")
+    min_class_ratio = risk_profiles.value_counts().min() / len(risk_profiles)
+    print(f"Minimum class ratio: {min_class_ratio:.3f}")
+    if min_class_ratio < 0.05:
+        print("⚠️ Warning: Severe class imbalance detected")
 
 # --- Feature Categories Summary ---
 print("\n=== Feature Categories Summary ===")
@@ -225,41 +247,49 @@ for category, cols in feature_categories.items():
 # --- Save Processed Data ---
 output_dir = "output"
 
-# Save cleaned features ready for GNN training
+# Save clean features (NO keywords, NO target leakage)
 features.to_csv(f"{output_dir}/gnn_features.csv", index=False)
-print(f"\nSaved GNN-ready features to '{output_dir}/gnn_features.csv'")
+print(f"\n✅ Saved GNN-ready features to '{output_dir}/gnn_features.csv'")
 
-# Save labels if available
-if labels is not None:
-    labels.to_csv(f"{output_dir}/gnn_labels.csv", index=False, header=True)
-    print(f"Saved labels to '{output_dir}/gnn_labels.csv'")
+# Save credit risk labels separately
+for label_name, label_data in credit_risk_labels.items():
+    label_data.to_csv(f"{output_dir}/gnn_labels_{label_name}.csv", index=False, header=True)
+    print(f"✅ Saved {label_name} labels to '{output_dir}/gnn_labels_{label_name}.csv'")
 
-# ✅ FIXED: Corrected feature metadata
+# ✅ Feature metadata for credit risk model
 feature_metadata = {
     'feature_names': list(features.columns),
-    'categorical_features': categorical_columns,  # Only actual categorical features
-    'numerical_features': numerical_columns,     # Only actual numerical features
-    'binary_features': binary_columns,           # Only binary features
+    'categorical_features': categorical_columns,
+    'numerical_features': numerical_columns,
+    'binary_features': binary_columns,
     'feature_categories': feature_categories,
     'total_features': len(features.columns),
     'total_agents': len(features),
-    'target_variable': 'fraud_type' if 'fraud_type' in df.columns else 'risk_profile',
-    'excluded_features': target_variables  # Document what was excluded
+    'primary_target': 'risk_score',           # Credit risk regression
+    'secondary_target': 'risk_profile',       # Credit risk classification
+    'excluded_features': excluded_features,   # Document exclusions
+    'encoding_info': {
+        'categorical_encoded': True,
+        'numerical_normalized': True,
+        'binary_as_int': True
+    }
 }
 
 with open(f"{output_dir}/feature_metadata.json", 'w') as f:
     json.dump(feature_metadata, f, indent=2)
-print(f"Saved feature metadata to '{output_dir}/feature_metadata.json'")
+print(f"✅ Saved feature metadata to '{output_dir}/feature_metadata.json'")
 
-# --- Generate Feature Summary for GNN Model ---
-print("\n=== GNN Model Ready Summary ===")
+# --- Final Validation ---
+print("\n=== Credit Risk GNN Model Ready Summary ===")
 print(f"✅ Node features: {len(features.columns)} dimensions")
 print(f"✅ Agent nodes: {len(features)} total")
-if labels is not None:
-    print(f"✅ Target classes: {len(labels.value_counts(dropna=False))}")
-print(f"✅ Data type: Pattern-based features (no keyword learning)")
-print(f"✅ NO target leakage: fraud_type, ring_id, device_id excluded from features")
-print(f"✅ Clean feature categories: {len(feature_categories)} categories")
-print(f"✅ Ready for graph construction with transaction data")
+print(f"✅ Primary target: Risk score (continuous 0-1) for regression")
+print(f"✅ Secondary target: Risk profile (categorical) for classification")
+print(f"✅ Feature types: Pattern-based behavioral scores (NO keywords)")
+print(f"✅ NO target leakage: All targets excluded from features")
+print(f"✅ NO archetype keywords: Removed archetype_name and similar")
+print(f"✅ Encoded categoricals: All categorical features converted to numbers")
+print(f"✅ Normalized features: All numerical features standardized")
+print(f"✅ Ready for graph-based credit risk assessment")
 
-print("\nData preparation complete! Ready for GNN training.")
+print("\n🎯 Data preparation complete! Ready for credit risk GNN training.")

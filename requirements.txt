@@ -8,3 +8,4 @@ networkx
 plotly
 streamlit
 flask
+python-louvain
